@@ -11,13 +11,14 @@
  * 1. Emit a directory marker for every non-root directory.
  * 2. For each child (sorted by `localeCompare`), recurse into subdirs or
  *    read file content into memory.
+ * 3. Skip paths excluded by `.gitignore` rules (outside → inside).
  *
  * This path loads every file into RAM — use the streaming builder in
  * `streaming/folder.ts` for large directory trees.
  */
 
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
+import { walkDirectory } from "../fs/walk.js";
 import type { ArchiveEntry } from "./types.js";
 
 /**
@@ -28,23 +29,14 @@ import type { ArchiveEntry } from "./types.js";
 export function collectEntries(rootDir: string): ArchiveEntry[] {
 	const entries: ArchiveEntry[] = [];
 
-	function walk(absDir: string, relDir: string) {
-		if (relDir !== "") entries.push({ type: "d", relPath: relDir });
+	walkDirectory(rootDir, {
+		onDirectory: (_absDir, relDir) => {
+			entries.push({ type: "d", relPath: relDir });
+		},
+		onFile: (abs, rel) => {
+			entries.push({ type: "f", relPath: rel, content: readFileSync(abs) });
+		},
+	});
 
-		const dirents = readdirSync(absDir, { withFileTypes: true }).sort((a, b) =>
-			a.name.localeCompare(b.name),
-		);
-		for (const dirent of dirents) {
-			const abs = join(absDir, dirent.name);
-			const rel = relDir ? `${relDir}/${dirent.name}` : dirent.name;
-			if (dirent.isDirectory()) {
-				walk(abs, rel);
-			} else if (dirent.isFile()) {
-				entries.push({ type: "f", relPath: rel, content: readFileSync(abs) });
-			}
-		}
-	}
-
-	walk(rootDir, "");
 	return entries;
 }

@@ -15,7 +15,8 @@ Usage:
 Commands:
   compress      Brotli-compress the input (max quality), encode it, and
                 write it to a file. Pass a path to auto-detect file vs
-                folder, or use -t for inline text.
+                folder, or use -t for inline text. Folder compression
+                automatically applies .gitignore rules (outside → inside).
   decompress    Decode the input, brotli-decompress it, and write the
                 result. Pass a path to the compressed file; auto-detects
                 split parts (e.g. output.01.txt) and whether the payload

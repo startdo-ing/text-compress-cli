@@ -53,6 +53,23 @@ describe("cli path auto-detection", () => {
 		expect(readFileSync(output, "utf-8").length).toBeGreaterThan(0);
 	});
 
+	it("excludes gitignored files when compressing a folder", () => {
+		const dir = makeTempDir();
+		const project = join(dir, "project");
+		mkdirSync(project);
+		writeFileSync(join(project, ".gitignore"), "*.log\n");
+		writeFileSync(join(project, "readme.txt"), "hello");
+		writeFileSync(join(project, "debug.log"), "drop");
+		const output = join(dir, "project.txt");
+		const restored = join(dir, "restored");
+
+		runCli(["compress", project, "-o", output]);
+		runCli(["decompress", output, "-o", restored]);
+
+		expect(readFileSync(join(restored, "readme.txt"), "utf-8")).toBe("hello");
+		expect(() => readFileSync(join(restored, "debug.log"), "utf-8")).toThrow();
+	});
+
 	it("decompresses from a bare path", () => {
 		const dir = makeTempDir();
 		const input = join(dir, "notes.md");

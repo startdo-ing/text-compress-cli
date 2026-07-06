@@ -32,7 +32,6 @@ import {
 	createWriteStream,
 	mkdtempSync,
 	openSync,
-	readdirSync,
 	readSync,
 	rmSync,
 	statSync,
@@ -47,6 +46,7 @@ import { createMaxQualityBrotliCompress } from "../compression/brotli.js";
 import { encodeBase64 } from "../encoding/base64.js";
 import { estimatedEncodedLength } from "../encoding/index.js";
 import { encodeBase85 } from "../encoding/z85.js";
+import { walkDirectory } from "../fs/walk.js";
 import { TAG_FOLDER } from "../payload/tags.js";
 import {
 	formatSplitOutputPath,
@@ -79,29 +79,17 @@ function buildArchiveFile(rootDir: string, archivePath: string): ArchiveStats {
 	let dirCount = 0;
 	let originalBytes = 0;
 
-	function walk(absDir: string, relDir: string) {
-		if (relDir !== "") {
-			writeDirEntry(fd, relDir);
-			dirCount++;
-		}
-
-		const dirents = readdirSync(absDir, { withFileTypes: true }).sort((a, b) =>
-			a.name.localeCompare(b.name),
-		);
-		for (const dirent of dirents) {
-			const abs = join(absDir, dirent.name);
-			const rel = relDir ? `${relDir}/${dirent.name}` : dirent.name;
-			if (dirent.isDirectory()) {
-				walk(abs, rel);
-			} else if (dirent.isFile()) {
+	try {
+		walkDirectory(rootDir, {
+			onDirectory: (_absDir, relDir) => {
+				writeDirEntry(fd, relDir);
+				dirCount++;
+			},
+			onFile: (abs, rel) => {
 				originalBytes += writeFileEntry(fd, rel, abs, COPY_CHUNK);
 				fileCount++;
-			}
-		}
-	}
-
-	try {
-		walk(rootDir, "");
+			},
+		});
 	} finally {
 		closeSync(fd);
 	}
