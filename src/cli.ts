@@ -233,10 +233,10 @@ function runDecompress(args: Args) {
 
 function printUsage() {
   console.log(`
-text-compress - brotli (max quality) compress/decompress with base64 or base85 output
+tc - brotli (max quality) compress/decompress with base64 or base85 output
 
 Usage:
-  text-compress <command> [options]
+  tc <command> [options]
 
 Commands:
   compress      Brotli-compress the input (max quality), encode it, and
@@ -275,15 +275,15 @@ Defaults:
     decompress (folder):  <input>.de   (recreated as a directory)
 
 Examples:
-  text-compress compress -t "some text" -o output.txt
-  text-compress compress -f notes.md
-  text-compress compress -f notes.md -e 85
-  text-compress compress -d ./my-project
-  text-compress compress -f notes.md -s 4000
-  text-compress decompress -f notes.txt
-  text-compress decompress -f output.01.txt
-  text-compress decompress -f my-project.txt
-  text-compress decompress -t "<base64>" -o restored.txt
+  tc compress -t "some text" -o output.txt
+  tc compress -f notes.md
+  tc compress -f notes.md -e 85
+  tc compress -d ./my-project
+  tc compress -f notes.md -s 4000
+  tc decompress -f notes.txt
+  tc decompress -f output.01.txt
+  tc decompress -f my-project.txt
+  tc decompress -t "<base64>" -o restored.txt
 
 Every run prints analytics (encoding, size, ratio, time taken) after
 writing the output.

@@ -1,4 +1,4 @@
-# text-compress
+# @startdoing/tc
 
 Brotli-compress text or entire folder trees into a single base64 or Z85 base85 string — ideal for pasting compressed payloads into chat, email, or code.
 
@@ -13,7 +13,7 @@ Brotli-compress text or entire folder trees into a single base64 or Z85 base85 s
 ## Install
 
 ```bash
-npm install text-compress
+npm install -g @startdoing/tc
 ```
 
 Or clone and build locally:
@@ -29,19 +29,19 @@ npm run build
 
 ```bash
 # Compress text
-npx text-compress compress -t "hello world" -o output.txt
+tc compress -t "hello world" -o output.txt
 
 # Compress a file
-npx text-compress compress -f notes.md
+tc compress -f notes.md
 
 # Compress a folder
-npx text-compress compress -d ./my-project
+tc compress -d ./my-project
 
 # Use base85 encoding (~8% smaller)
-npx text-compress compress -f notes.md -e 85
+tc compress -f notes.md -e 85
 
 # Decompress (auto-detects text vs folder)
-npx text-compress decompress -f output.txt
+tc decompress -f output.txt
 ```
 
 During development:
@@ -58,7 +58,7 @@ import {
   decompress,
   compressFolder,
   decompressToPath,
-} from "text-compress";
+} from "@startdoing/tc";
 
 // Text
 const encoded = compress("hello world");          // base64 by default

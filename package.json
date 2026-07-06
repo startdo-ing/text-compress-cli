@@ -1,5 +1,5 @@
 {
-  "name": "text-compress",
+  "name": "@startdoing/tc",
   "version": "1.0.0",
   "description": "Brotli-compress text or folders to base64/base85 strings for easy sharing",
   "type": "module",
@@ -12,7 +12,7 @@
     }
   },
   "bin": {
-    "text-compress": "./dist/cli.js"
+    "tc": "./dist/cli.js"
   },
   "files": [
     "dist"
@@ -33,14 +33,22 @@
     "text",
     "archive"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/startdo-ing/text-compress-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/startdo-ing/text-compress-cli/issues"
+  },
+  "homepage": "https://github.com/startdo-ing/text-compress-cli#readme",
   "license": "MIT",
   "engines": {
     "node": ">=18"
   },
   "devDependencies": {
-    "@types/node": "^22.15.21",
+    "@types/node": "^26.1.0",
     "tsx": "^4.19.4",
-    "typescript": "^5.8.3",
-    "vitest": "^3.2.3"
+    "typescript": "7.0.1-rc",
+    "vitest": "^4.1.9"
   }
 }
