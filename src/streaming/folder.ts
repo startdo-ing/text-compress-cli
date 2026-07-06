@@ -1,3 +1,31 @@
+/**
+ * @module streaming/folder
+ *
+ * Memory-efficient folder compression pipeline.
+ *
+ * Large directory trees may exceed available RAM if every file is loaded
+ * into a single buffer. This module streams each stage to disk:
+ *
+ * ```
+ *   walk tree → temp archive file
+ *            → stream Brotli → temp compressed file
+ *            → stream encode  → output .txt (possibly split)
+ * ```
+ *
+ * ## Pattern: staged pipeline with temp files
+ *
+ * Each stage reads from the previous stage's output file and writes to
+ * the next, keeping peak memory bounded by chunk buffer sizes rather than
+ * total archive size.
+ *
+ * ## Chunk sizes
+ *
+ * - `COPY_CHUNK` (1 MiB) — file content copied into the archive.
+ * - `ENCODE_READ_CHUNK` (3 MiB) — binary read buffer for Base64 streaming.
+ *   Base64 encoding is applied per-chunk for `encoding === 64`; Z85 requires
+ *   the full padded buffer and is loaded once (trade-off for correctness).
+ */
+
 import {
 	closeSync,
 	createReadStream,
@@ -14,21 +42,25 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { writeDirEntry, writeFileEntry } from "../archive/format.js";
+import { createMaxQualityBrotliCompress } from "../compression/brotli.js";
+import { encodeBase64 } from "../encoding/base64.js";
+import { estimatedEncodedLength } from "../encoding/index.js";
+import { encodeBase85 } from "../encoding/z85.js";
+import { TAG_FOLDER } from "../payload/tags.js";
 import {
-	brotliCompressSync,
-	createBrotliCompress,
-	constants as zlibConstants,
-} from "node:zlib";
-import {
-	type Encoding,
 	formatSplitOutputPath,
 	resolveSplitChunkSize,
-	TAG_FOLDER,
-} from "./index.js";
+} from "../split/parts.js";
+import type { Encoding } from "../types.js";
 
+/** Buffer size when copying file content into the archive. */
 const COPY_CHUNK = 1024 * 1024;
+
+/** Buffer size when reading compressed bytes for Base64 encoding. */
 const ENCODE_READ_CHUNK = 3 * 1024 * 1024;
 
+/** Statistics collected while building the archive. */
 interface ArchiveStats {
 	fileCount: number;
 	dirCount: number;
@@ -36,46 +68,11 @@ interface ArchiveStats {
 	archiveBytes: number;
 }
 
-function writeDirEntry(fd: number, relPath: string) {
-	const pathBuf = Buffer.from(relPath, "utf-8");
-	const pathLenBuf = Buffer.alloc(4);
-	pathLenBuf.writeUInt32LE(pathBuf.length, 0);
-	writeSync(fd, Buffer.from([0x44]));
-	writeSync(fd, pathLenBuf);
-	writeSync(fd, pathBuf);
-}
-
-function writeFileEntry(fd: number, relPath: string, filePath: string): number {
-	const pathBuf = Buffer.from(relPath, "utf-8");
-	const pathLenBuf = Buffer.alloc(4);
-	pathLenBuf.writeUInt32LE(pathBuf.length, 0);
-	const contentLen = statSync(filePath).size;
-	const contentLenBuf = Buffer.alloc(4);
-	contentLenBuf.writeUInt32LE(contentLen, 0);
-
-	writeSync(fd, Buffer.from([0x46]));
-	writeSync(fd, pathLenBuf);
-	writeSync(fd, pathBuf);
-	writeSync(fd, contentLenBuf);
-
-	const srcFd = openSync(filePath, "r");
-	try {
-		const buf = Buffer.alloc(COPY_CHUNK);
-		let copied = 0;
-		while (copied < contentLen) {
-			const toRead = Math.min(buf.length, contentLen - copied);
-			const n = readSync(srcFd, buf, 0, toRead, copied);
-			if (n <= 0) break;
-			writeSync(fd, buf, 0, n);
-			copied += n;
-		}
-	} finally {
-		closeSync(srcFd);
-	}
-
-	return contentLen;
-}
-
+/**
+ * Depth-first walk that writes archive entries directly to a file.
+ *
+ * Same traversal order as `collectEntries`, but streams to disk.
+ */
 function buildArchiveFile(rootDir: string, archivePath: string): ArchiveStats {
 	const fd = openSync(archivePath, "w");
 	let fileCount = 0;
@@ -97,7 +94,7 @@ function buildArchiveFile(rootDir: string, archivePath: string): ArchiveStats {
 			if (dirent.isDirectory()) {
 				walk(abs, rel);
 			} else if (dirent.isFile()) {
-				originalBytes += writeFileEntry(fd, rel, abs);
+				originalBytes += writeFileEntry(fd, rel, abs, COPY_CHUNK);
 				fileCount++;
 			}
 		}
@@ -117,6 +114,12 @@ function buildArchiveFile(rootDir: string, archivePath: string): ArchiveStats {
 	};
 }
 
+/**
+ * Create a readable stream that prepends the folder tag byte before file bytes.
+ *
+ * Pattern: **prefix transform** — prepends metadata without copying the
+ * entire file into memory.
+ */
 function prependTagStream(tag: number, filePath: string): Readable {
 	const tagBuf = Buffer.from([tag]);
 	const file = createReadStream(filePath);
@@ -130,60 +133,32 @@ function prependTagStream(tag: number, filePath: string): Readable {
 	);
 }
 
+/**
+ * Stream Brotli-compress a file (with tag prefix) to another file.
+ */
 async function brotliCompressFile(
 	inputPath: string,
 	outputPath: string,
 ): Promise<void> {
 	await pipeline(
 		prependTagStream(TAG_FOLDER, inputPath),
-		createBrotliCompress({
-			params: {
-				[zlibConstants.BROTLI_PARAM_QUALITY]: zlibConstants.BROTLI_MAX_QUALITY,
-				[zlibConstants.BROTLI_PARAM_LGWIN]:
-					zlibConstants.BROTLI_MAX_WINDOW_BITS,
-				[zlibConstants.BROTLI_PARAM_SIZE_HINT]: statSync(inputPath).size + 1,
-			},
-		}),
+		createMaxQualityBrotliCompress(statSync(inputPath).size + 1),
 		createWriteStream(outputPath),
 	);
 }
 
-function estimatedEncodedLength(
-	binaryBytes: number,
-	encoding: Encoding,
-): number {
-	if (encoding === 64) return Math.ceil(binaryBytes / 3) * 4;
-	const padded = 1 + binaryBytes + ((4 - ((binaryBytes + 1) % 4)) % 4);
-	return (padded / 4) * 5;
-}
-
-const Z85_ALPHABET =
-	"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#";
-
-function z85EncodeBuffer(buffer: Buffer): string {
-	let out = "";
-	for (let i = 0; i < buffer.length; i += 4) {
-		let value =
-			buffer[i] * 16777216 +
-			buffer[i + 1] * 65536 +
-			buffer[i + 2] * 256 +
-			buffer[i + 3];
-		const chars = new Array(5);
-		for (let j = 4; j >= 0; j--) {
-			chars[j] = Z85_ALPHABET[value % 85];
-			value = Math.floor(value / 85);
-		}
-		out += chars.join("");
-	}
-	return out;
-}
-
+/** Open one numbered part file for split output. */
 function openPart(outputPath: string, partIndex: number, totalParts: number) {
 	const path = formatSplitOutputPath(outputPath, partIndex, totalParts);
 	const fd = openSync(path, "w");
 	return { path, fd };
 }
 
+/**
+ * Stream-read a binary file and write encoded text to one or more output files.
+ *
+ * Handles optional character-based splitting across part files.
+ */
 function encodeBinaryFileToTextFiles(
 	inputPath: string,
 	outputPath: string,
@@ -201,7 +176,7 @@ function encodeBinaryFileToTextFiles(
 				const toRead = Math.min(buf.length, binaryBytes - pos);
 				const n = readSync(srcFd, buf, 0, toRead, pos);
 				if (n <= 0) break;
-				writeEncoded(buf.subarray(0, n).toString("base64"));
+				writeEncoded(encodeBase64(buf.subarray(0, n)));
 				pos += n;
 			}
 		} else {
@@ -212,13 +187,7 @@ function encodeBinaryFileToTextFiles(
 				if (n <= 0) break;
 				pos += n;
 			}
-			const padLength = (4 - ((raw.length + 1) % 4)) % 4;
-			const padded = Buffer.concat([
-				Buffer.from([padLength]),
-				raw,
-				Buffer.alloc(padLength),
-			]);
-			writeEncoded(z85EncodeBuffer(padded));
+			writeEncoded(encodeBase85(raw));
 		}
 	};
 
@@ -278,12 +247,18 @@ function encodeBinaryFileToTextFiles(
 	return paths;
 }
 
+/** Result of {@link compressFolderToPath}. */
 export interface CompressFolderToPathResult extends ArchiveStats {
 	outputPaths: string[];
 	compressedBytes: number;
 	splitChunkSize?: number;
 }
 
+/**
+ * Compress a folder to encoded text file(s) using the streaming pipeline.
+ *
+ * Creates a temporary working directory that is always cleaned up in `finally`.
+ */
 export async function compressFolderToPath(
 	dirPath: string,
 	outputPath: string,
@@ -310,15 +285,4 @@ export async function compressFolderToPath(
 	} finally {
 		rmSync(tempDir, { recursive: true, force: true });
 	}
-}
-
-// Small in-memory brotli helper kept for tests / text mode parity checks.
-export function brotliCompressBuffer(input: Buffer): Buffer {
-	return brotliCompressSync(input, {
-		params: {
-			[zlibConstants.BROTLI_PARAM_QUALITY]: zlibConstants.BROTLI_MAX_QUALITY,
-			[zlibConstants.BROTLI_PARAM_LGWIN]: zlibConstants.BROTLI_MAX_WINDOW_BITS,
-			[zlibConstants.BROTLI_PARAM_SIZE_HINT]: input.length,
-		},
-	});
 }

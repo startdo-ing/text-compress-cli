@@ -97,6 +97,10 @@ npm run build     # compile to dist/
 npm run test:watch
 ```
 
+## Architecture
+
+For a guided tour of the codebase — module layout, data-flow diagrams, algorithms, and design patterns — see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
 ## License
 
 MIT
