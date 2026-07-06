@@ -31,17 +31,17 @@ npm run build
 # Compress text
 tc compress -t "hello world" -o output.txt
 
-# Compress a file
-tc compress -f notes.md
+# Compress a file (path auto-detected)
+tc compress notes.md
 
-# Compress a folder
-tc compress -d ./my-project
+# Compress a folder (path auto-detected)
+tc compress ./my-project
 
 # Use base85 encoding (~8% smaller)
-tc compress -f notes.md -e 85
+tc compress notes.md -e 85
 
 # Decompress (auto-detects text vs folder)
-tc decompress -f output.txt
+tc decompress output.txt
 ```
 
 During development:
