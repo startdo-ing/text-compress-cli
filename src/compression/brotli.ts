@@ -28,19 +28,15 @@
  * @see https://github.com/google/brotli — reference implementation
  */
 
-import {
-	brotliCompressSync,
-	createBrotliCompress,
-	constants as zlibConstants,
-} from "node:zlib";
+import { brotliCompressSync, createBrotliCompress, constants as zlibConstants } from "node:zlib"
 
 /** Shared Brotli parameters for maximum compression ratio. */
 function maxQualityParams(sizeHint: number) {
-	return {
-		[zlibConstants.BROTLI_PARAM_QUALITY]: zlibConstants.BROTLI_MAX_QUALITY,
-		[zlibConstants.BROTLI_PARAM_LGWIN]: zlibConstants.BROTLI_MAX_WINDOW_BITS,
-		[zlibConstants.BROTLI_PARAM_SIZE_HINT]: sizeHint,
-	};
+  return {
+    [zlibConstants.BROTLI_PARAM_QUALITY]: zlibConstants.BROTLI_MAX_QUALITY,
+    [zlibConstants.BROTLI_PARAM_LGWIN]: zlibConstants.BROTLI_MAX_WINDOW_BITS,
+    [zlibConstants.BROTLI_PARAM_SIZE_HINT]: sizeHint,
+  }
 }
 
 /**
@@ -49,7 +45,7 @@ function maxQualityParams(sizeHint: number) {
  * Suitable for text payloads and folder archives that fit in RAM.
  */
 export function brotliCompress(input: Buffer): Buffer {
-	return brotliCompressSync(input, { params: maxQualityParams(input.length) });
+  return brotliCompressSync(input, { params: maxQualityParams(input.length) })
 }
 
 /**
@@ -59,5 +55,5 @@ export function brotliCompress(input: Buffer): Buffer {
  * transform into a file on disk without ever being fully buffered.
  */
 export function createMaxQualityBrotliCompress(sizeHint: number) {
-	return createBrotliCompress({ params: maxQualityParams(sizeHint) });
+  return createBrotliCompress({ params: maxQualityParams(sizeHint) })
 }

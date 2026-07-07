@@ -6,7 +6,7 @@
 
 /** Print usage guide to stdout. */
 export function printUsage() {
-	console.log(`
+  console.log(`
 tc - brotli (max quality) compress/decompress with base64 or base85 output
 
 Usage:
@@ -62,5 +62,5 @@ Examples:
 
 Every run prints analytics (encoding, size, ratio, time taken) after
 writing the output.
-`);
+`)
 }

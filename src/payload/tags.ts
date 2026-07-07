@@ -31,16 +31,16 @@
  * ```
  */
 
-import { brotliDecompressSync } from "node:zlib";
-import { brotliCompress } from "../compression/brotli.js";
-import { decodeBuffer, encodeBuffer } from "../encoding/index.js";
-import type { Encoding } from "../types.js";
+import { brotliDecompressSync } from "node:zlib"
+import { brotliCompress } from "../compression/brotli.js"
+import { decodeBuffer, encodeBuffer } from "../encoding/index.js"
+import type { Encoding } from "../types.js"
 
 /** Tag byte for UTF-8 text payloads. */
-export const TAG_TEXT = 0x01;
+export const TAG_TEXT = 0x01
 
 /** Tag byte for folder archive payloads. */
-export const TAG_FOLDER = 0x02;
+export const TAG_FOLDER = 0x02
 
 /**
  * Prepend a 1-byte type tag to raw payload bytes.
@@ -49,7 +49,7 @@ export const TAG_FOLDER = 0x02;
  * @param data - Uncompressed payload body.
  */
 export function wrapPayload(tag: number, data: Buffer): Buffer {
-	return Buffer.concat([Buffer.from([tag]), data]);
+  return Buffer.concat([Buffer.from([tag]), data])
 }
 
 /**
@@ -58,11 +58,11 @@ export function wrapPayload(tag: number, data: Buffer): Buffer {
  * Low-level entry point used by both `decompress()` and `decompressToPath()`.
  */
 export function decompressPayload(
-	encoded: string,
-	encoding: Encoding,
+  encoded: string,
+  encoding: Encoding,
 ): { tag: number; data: Buffer } {
-	const raw = brotliDecompressSync(decodeBuffer(encoded, encoding));
-	return { tag: raw[0], data: raw.subarray(1) };
+  const raw = brotliDecompressSync(decodeBuffer(encoded, encoding))
+  return { tag: raw[0], data: raw.subarray(1) }
 }
 
 /**
@@ -70,10 +70,6 @@ export function decompressPayload(
  *
  * Shared helper for text and folder compression paths.
  */
-export function compressTaggedPayload(
-	tag: number,
-	data: Buffer,
-	encoding: Encoding,
-): string {
-	return encodeBuffer(brotliCompress(wrapPayload(tag, data)), encoding);
+export function compressTaggedPayload(tag: number, data: Buffer, encoding: Encoding): string {
+  return encodeBuffer(brotliCompress(wrapPayload(tag, data)), encoding)
 }

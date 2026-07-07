@@ -1,60 +1,60 @@
 {
-	"name": "@startdoing/tc",
-	"version": "1.0.2",
-	"description": "Brotli-compress text or folders to base64/base85 strings for easy sharing",
-	"type": "module",
-	"main": "./dist/index.js",
-	"types": "./dist/index.d.ts",
-	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js"
-		}
-	},
-	"bin": {
-		"tc": "./dist/cli.js"
-	},
-	"files": [
-		"dist"
-	],
-	"scripts": {
-		"build": "tsc",
-		"check": "biome check --write . && tsc",
-		"dev": "tsx src/cli.ts",
-		"test": "vitest run",
-		"pretest": "npm run build",
-		"test:watch": "vitest",
-		"prepublishOnly": "npm run build"
-	},
-	"keywords": [
-		"brotli",
-		"compression",
-		"base64",
-		"base85",
-		"z85",
-		"text",
-		"archive"
-	],
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/startdo-ing/text-compress-cli.git"
-	},
-	"bugs": {
-		"url": "https://github.com/startdo-ing/text-compress-cli/issues"
-	},
-	"homepage": "https://github.com/startdo-ing/text-compress-cli#readme",
-	"license": "MIT",
-	"engines": {
-		"node": ">=18"
-	},
-	"devDependencies": {
-		"@biomejs/biome": "^2.5.2",
-		"@types/node": "^26.1.0",
-		"tsx": "^4.19.4",
-		"typescript": "7.0.1-rc",
-		"vitest": "^4.1.9"
-	},
-	"dependencies": {
-		"ignore": "^7.0.5"
-	}
+  "name": "@startdoing/tc",
+  "version": "1.0.3",
+  "description": "Brotli-compress text or folders to base64/base85 strings for easy sharing",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "tc": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "check": "biome check --write . && tsc",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "pretest": "npm run build",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "brotli",
+    "compression",
+    "base64",
+    "base85",
+    "z85",
+    "text",
+    "archive"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/startdo-ing/text-compress-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/startdo-ing/text-compress-cli/issues"
+  },
+  "homepage": "https://github.com/startdo-ing/text-compress-cli#readme",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.2",
+    "@types/node": "^26.1.0",
+    "tsx": "^4.19.4",
+    "typescript": "7.0.1-rc",
+    "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "ignore": "^7.0.5"
+  }
 }

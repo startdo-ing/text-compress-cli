@@ -13,15 +13,11 @@
  * Decodes, decompresses, checks the folder tag, and unpacks to disk.
  */
 
-import { collectEntries } from "../archive/collect.js";
-import { serializeArchive } from "../archive/format.js";
-import { unpackDirectory } from "../archive/unpack.js";
-import {
-	compressTaggedPayload,
-	decompressPayload,
-	TAG_FOLDER,
-} from "../payload/tags.js";
-import type { Encoding } from "../types.js";
+import { collectEntries } from "../archive/collect.js"
+import { serializeArchive } from "../archive/format.js"
+import { unpackDirectory } from "../archive/unpack.js"
+import { compressTaggedPayload, decompressPayload, TAG_FOLDER } from "../payload/tags.js"
+import type { Encoding } from "../types.js"
 
 /**
  * Pack a directory tree into a single encoded string (in-memory).
@@ -29,21 +25,18 @@ import type { Encoding } from "../types.js";
  * @returns Encoded blob plus statistics about the source folder.
  */
 export function compressFolder(dirPath: string, encoding: Encoding = 64) {
-	const entries = collectEntries(dirPath);
-	const archive = serializeArchive(entries);
-	const encoded = compressTaggedPayload(TAG_FOLDER, archive, encoding);
-	const files = entries.filter((e) => e.type === "f");
-	const originalBytes = files.reduce(
-		(sum, e) => sum + (e.content?.length ?? 0),
-		0,
-	);
-	return {
-		encoded,
-		fileCount: files.length,
-		dirCount: entries.length - files.length,
-		originalBytes,
-		archiveBytes: archive.length,
-	};
+  const entries = collectEntries(dirPath)
+  const archive = serializeArchive(entries)
+  const encoded = compressTaggedPayload(TAG_FOLDER, archive, encoding)
+  const files = entries.filter((e) => e.type === "f")
+  const originalBytes = files.reduce((sum, e) => sum + (e.content?.length ?? 0), 0)
+  return {
+    encoded,
+    fileCount: files.length,
+    dirCount: entries.length - files.length,
+    originalBytes,
+    archiveBytes: archive.length,
+  }
 }
 
 /**
@@ -51,16 +44,10 @@ export function compressFolder(dirPath: string, encoding: Encoding = 64) {
  *
  * @throws If the payload is text, not a folder archive.
  */
-export function decompressToPath(
-	encoded: string,
-	destDir: string,
-	encoding: Encoding = 64,
-) {
-	const { tag, data } = decompressPayload(encoded, encoding);
-	if (tag !== TAG_FOLDER) {
-		throw new Error(
-			"This payload is compressed text, not a folder. Use decompress.",
-		);
-	}
-	return unpackDirectory(data, destDir);
+export function decompressToPath(encoded: string, destDir: string, encoding: Encoding = 64) {
+  const { tag, data } = decompressPayload(encoded, encoding)
+  if (tag !== TAG_FOLDER) {
+    throw new Error("This payload is compressed text, not a folder. Use decompress.")
+  }
+  return unpackDirectory(data, destDir)
 }

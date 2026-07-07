@@ -12,25 +12,25 @@
  */
 
 // Folder API
-export { compressFolder, decompressToPath } from "./api/folder.js";
+export { compressFolder, decompressToPath } from "./api/folder.js"
 
 // Text API
-export { compress, decompress } from "./api/text.js";
+export { compress, decompress } from "./api/text.js"
 // Archive unpack (exposed for advanced use / tests)
-export { unpackDirectory } from "./archive/unpack.js";
+export { unpackDirectory } from "./archive/unpack.js"
 // Path validation helpers
-export { assertDirectory, readTextFile } from "./fs/paths.js";
+export { assertDirectory, readTextFile } from "./fs/paths.js"
 // Low-level payload access
-export { decompressPayload, TAG_FOLDER, TAG_TEXT } from "./payload/tags.js";
+export { decompressPayload, TAG_FOLDER, TAG_TEXT } from "./payload/tags.js"
 
 // Split-file helpers
 export {
-	AUTO_SPLIT_CHARS,
-	formatSplitOutputPath,
-	parseSplitPartPath,
-	readSplitInput,
-	resolveSplitChunkSize,
-	resolveSplitInputPaths,
-	splitString,
-} from "./split/parts.js";
-export type { Encoding } from "./types.js";
+  AUTO_SPLIT_CHARS,
+  formatSplitOutputPath,
+  parseSplitPartPath,
+  readSplitInput,
+  resolveSplitChunkSize,
+  resolveSplitInputPaths,
+  splitString,
+} from "./split/parts.js"
+export type { Encoding } from "./types.js"

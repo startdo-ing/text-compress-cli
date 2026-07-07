@@ -15,4 +15,4 @@
  * - `85` — Z85 Base85 (ZeroMQ RFC 32). ~8 % smaller; uses punctuation
  *   that is safe in code blocks but not in all chat clients.
  */
-export type Encoding = 64 | 85;
+export type Encoding = 64 | 85

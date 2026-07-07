@@ -12,22 +12,22 @@
  * algorithm at runtime without branching scattered across the codebase.
  */
 
-import type { Encoding } from "../types.js";
-import { decodeBase64, encodeBase64 } from "./base64.js";
-import { decodeBase85, encodeBase85 } from "./z85.js";
+import type { Encoding } from "../types.js"
+import { decodeBase64, encodeBase64 } from "./base64.js"
+import { decodeBase85, encodeBase85 } from "./z85.js"
 
 /** Encode a binary buffer to a pasteable text string. */
 export function encodeBuffer(buffer: Buffer, encoding: Encoding): string {
-	if (encoding === 64) return encodeBase64(buffer);
-	if (encoding === 85) return encodeBase85(buffer);
-	throw new Error(`Unsupported encoding: ${encoding}`);
+  if (encoding === 64) return encodeBase64(buffer)
+  if (encoding === 85) return encodeBase85(buffer)
+  throw new Error(`Unsupported encoding: ${encoding}`)
 }
 
 /** Decode a pasteable text string back to a binary buffer. */
 export function decodeBuffer(str: string, encoding: Encoding): Buffer {
-	if (encoding === 64) return decodeBase64(str);
-	if (encoding === 85) return decodeBase85(str);
-	throw new Error(`Unsupported encoding: ${encoding}`);
+  if (encoding === 64) return decodeBase64(str)
+  if (encoding === 85) return decodeBase85(str)
+  throw new Error(`Unsupported encoding: ${encoding}`)
 }
 
 /**
@@ -39,11 +39,8 @@ export function decodeBuffer(str: string, encoding: Encoding): Buffer {
  * - Base64: `ceil(bytes / 3) × 4`
  * - Z85: accounts for the 1-byte pad prefix and block padding
  */
-export function estimatedEncodedLength(
-	binaryBytes: number,
-	encoding: Encoding,
-): number {
-	if (encoding === 64) return Math.ceil(binaryBytes / 3) * 4;
-	const padded = 1 + binaryBytes + ((4 - ((binaryBytes + 1) % 4)) % 4);
-	return (padded / 4) * 5;
+export function estimatedEncodedLength(binaryBytes: number, encoding: Encoding): number {
+  if (encoding === 64) return Math.ceil(binaryBytes / 3) * 4
+  const padded = 1 + binaryBytes + ((4 - ((binaryBytes + 1) % 4)) % 4)
+  return (padded / 4) * 5
 }

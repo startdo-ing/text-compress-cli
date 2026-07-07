@@ -14,12 +14,8 @@
  * distinguished by the leading tag byte after decompression.
  */
 
-import {
-	compressTaggedPayload,
-	decompressPayload,
-	TAG_TEXT,
-} from "../payload/tags.js";
-import type { Encoding } from "../types.js";
+import { compressTaggedPayload, decompressPayload, TAG_TEXT } from "../payload/tags.js"
+import type { Encoding } from "../types.js"
 
 /**
  * Compress a UTF-8 string to a pasteable encoded blob.
@@ -28,7 +24,7 @@ import type { Encoding } from "../types.js";
  * @param encoding - `64` (Base64) or `85` (Z85); default Base64.
  */
 export function compress(text: string, encoding: Encoding = 64): string {
-	return compressTaggedPayload(TAG_TEXT, Buffer.from(text, "utf-8"), encoding);
+  return compressTaggedPayload(TAG_TEXT, Buffer.from(text, "utf-8"), encoding)
 }
 
 /**
@@ -37,11 +33,9 @@ export function compress(text: string, encoding: Encoding = 64): string {
  * @throws If the payload is a folder archive (wrong tag).
  */
 export function decompress(encoded: string, encoding: Encoding = 64): string {
-	const raw = decompressPayload(encoded, encoding);
-	if (raw.tag !== TAG_TEXT) {
-		throw new Error(
-			"This payload is a compressed folder, not text. Use decompressToPath.",
-		);
-	}
-	return raw.data.toString("utf-8");
+  const raw = decompressPayload(encoded, encoding)
+  if (raw.tag !== TAG_TEXT) {
+    throw new Error("This payload is a compressed folder, not text. Use decompressToPath.")
+  }
+  return raw.data.toString("utf-8")
 }
