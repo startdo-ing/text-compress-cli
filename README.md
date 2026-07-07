@@ -9,6 +9,7 @@ Brotli-compress text or entire folder trees into a single base64 or Z85 base85 s
 - **Z85 base85** — ~8% smaller output; uses punctuation safe for code blocks
 - **Folder archives** — pack a whole directory tree (structure + file contents) into one string
 - **CLI + library** — use from the terminal or import in your own scripts
+- **Learning docs** — glossary of concepts, patterns, and keywords with file references ([docs/LEARNING.md](docs/LEARNING.md))
 
 ## Install
 
@@ -106,6 +107,16 @@ For a learning-oriented glossary of every concept, pattern, and keyword used in 
 ## Change logs
 
 How this repo started and grew — each version builds on the last.
+
+### v1.0.3 — Learning guide and formatting cleanup
+
+**Date:** 2026-07-07
+
+- Added `docs/LEARNING.md` — glossary of compression, encoding, design patterns, Node.js, TypeScript, CLI, security, testing, and CI concepts with file references and study paths
+- Added **Change logs** section to README documenting version history from v1.0.0 onward
+- Linked learning guide from README and `docs/ARCHITECTURE.md`
+- Switched Biome indent style from tabs to spaces (formatting only — no behaviour changes)
+- Added `bun.lock` for Bun package manager compatibility
 
 ### v1.0.2 — Gitignore-aware folder compression
 
