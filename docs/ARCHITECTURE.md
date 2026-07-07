@@ -267,6 +267,7 @@ Tests import from `src/index.js` (library) and execute `dist/cli.js` (CLI integr
 
 ## Further reading
 
+- [LEARNING.md](./LEARNING.md) — glossary of concepts, patterns, and keywords with file references
 - [Brotli format (RFC 7932)](https://www.rfc-editor.org/rfc/rfc7932)
 - [Z85 specification (ZeroMQ RFC 32)](https://rfc.zeromq.org/spec/32/)
 - [Base64 (RFC 4648)](https://www.rfc-editor.org/rfc/rfc4648)

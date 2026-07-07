@@ -101,6 +101,49 @@ npm run test:watch
 
 For a guided tour of the codebase — module layout, data-flow diagrams, algorithms, and design patterns — see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
+For a learning-oriented glossary of every concept, pattern, and keyword used in this repo (with file references and study paths), see **[docs/LEARNING.md](docs/LEARNING.md)**.
+
+## Change logs
+
+How this repo started and grew — each version builds on the last.
+
+### v1.0.2 — Gitignore-aware folder compression
+
+**Date:** 2026-07-06
+
+- Folder walks now respect `.gitignore` rules by default (`node_modules/`, `dist/`, etc. are skipped)
+- New `src/fs/gitignore.ts` — loads ancestor and per-directory ignore rules, matching git behaviour
+- New `src/fs/walk.ts` — shared depth-first walker used by both in-memory and streaming paths
+- Tests added in `test/gitignore.test.ts`
+
+### v1.0.1 — Modular architecture & npm publishing
+
+**Date:** 2026-07-06
+
+- **Major refactor:** monolithic `src/index.ts` and `src/cli.ts` split into domain modules (`encoding/`, `compression/`, `archive/`, `payload/`, `api/`, `cli/`, `streaming/`, `split/`, `fs/`)
+- Added `docs/ARCHITECTURE.md` — module layout, data-flow diagrams, design patterns
+- Folder archive support with custom binary format (length-prefixed entries)
+- Streaming folder compression pipeline for bounded memory on large trees
+- Split-file output for chat paste limits (auto-split at 30 000 characters)
+- Z85 base85 encoding option (`-e 85`, ~8% smaller than Base64)
+- CLI improvements: path auto-detection (file vs folder), analytics summary, smarter error messages
+- npm publish workflow (`.github/workflows/publish.yml`) — test and publish on push to `main`
+- Added Biome for linting/formatting (`biome.json`, `npm run check`)
+- Upgraded TypeScript and Vitest; added CLI integration tests (`test/cli.test.ts`)
+- Fixed CI: `pretest` hook builds before running tests
+
+### v1.0.0 — Initial release
+
+**Date:** 2026-07-06
+
+- Project born as `@startdoing/tc` — Brotli-compress text to a pasteable Base64 string
+- Core pipeline: UTF-8 text → type tag → Brotli (max quality) → Base64
+- CLI (`tc compress` / `tc decompress`) and library API (`compress` / `decompress`)
+- Folder compression and decompression in a single-file codebase (`src/index.ts`, `src/cli.ts`, `src/streaming.ts`)
+- Vitest test suite with round-trip tests (`test/text-compress.test.ts`)
+- GitHub Actions workflow scaffold (`.github/workflows/publish.yml`)
+- MIT license
+
 ## License
 
 MIT
