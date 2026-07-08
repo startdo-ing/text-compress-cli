@@ -32,9 +32,11 @@ import {
   createWriteStream,
   mkdtempSync,
   openSync,
+  readFileSync,
   readSync,
   rmSync,
   statSync,
+  writeFileSync,
   writeSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -43,6 +45,7 @@ import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { writeDirEntry, writeFileEntry } from "../archive/format.js"
 import { createMaxQualityBrotliCompress } from "../compression/brotli.js"
+import { encryptBuffer } from "../crypto/password.js"
 import { encodeBase64 } from "../encoding/base64.js"
 import { estimatedEncodedLength } from "../encoding/index.js"
 import { encodeBase85 } from "../encoding/z85.js"
@@ -246,6 +249,7 @@ export async function compressFolderToPath(
   outputPath: string,
   encoding: Encoding = 64,
   split?: number,
+  password?: string,
 ): Promise<CompressFolderToPathResult> {
   const tempDir = mkdtempSync(join(tmpdir(), "text-compress-"))
   const archivePath = join(tempDir, "archive.bin")
@@ -254,11 +258,17 @@ export async function compressFolderToPath(
   try {
     const stats = buildArchiveFile(dirPath, archivePath)
     await brotliCompressFile(archivePath, compressedPath)
-    const compressedBytes = statSync(compressedPath).size
+    let encodeInputPath = compressedPath
+    if (password) {
+      const encryptedPath = join(tempDir, "encrypted.bin")
+      writeFileSync(encryptedPath, encryptBuffer(readFileSync(compressedPath), password))
+      encodeInputPath = encryptedPath
+    }
+    const compressedBytes = statSync(encodeInputPath).size
     const encodedLength = estimatedEncodedLength(compressedBytes, encoding)
     const splitChunkSize = resolveSplitChunkSize(encodedLength, split)
     const outputPaths = encodeBinaryFileToTextFiles(
-      compressedPath,
+      encodeInputPath,
       outputPath,
       encoding,
       splitChunkSize,

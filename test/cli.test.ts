@@ -100,4 +100,45 @@ describe("cli path auto-detection", () => {
     runCli(["decompress", join(dir, "large-out.1.txt"), "-o", join(dir, "large-restored.txt")])
     expect(readFileSync(join(dir, "large-restored.txt"), "utf-8")).toBe(payload)
   })
+
+  it("round-trips text with a password", () => {
+    const dir = makeTempDir()
+    const input = join(dir, "secret.md")
+    const compressed = join(dir, "secret.txt")
+    const restored = join(dir, "secret.de.txt")
+    const password = "cli-password"
+    writeFileSync(input, "protected content")
+
+    runCli(["compress", input, "-o", compressed, "-p", password])
+    runCli(["decompress", compressed, "-o", restored, "-p", password])
+
+    expect(readFileSync(restored, "utf-8")).toBe("protected content")
+  })
+
+  it("round-trips a folder with a password", () => {
+    const dir = makeTempDir()
+    const project = join(dir, "project")
+    const output = join(dir, "project.txt")
+    const restored = join(dir, "restored")
+    const password = "folder-cli-password"
+    mkdirSync(project)
+    writeFileSync(join(project, "readme.txt"), "hello")
+
+    runCli(["compress", project, "-o", output, "-p", password])
+    runCli(["decompress", output, "-o", restored, "-p", password])
+
+    expect(readFileSync(join(restored, "readme.txt"), "utf-8")).toBe("hello")
+  })
+
+  it("rejects password-protected decompress without a password", () => {
+    const dir = makeTempDir()
+    const input = join(dir, "secret.md")
+    const compressed = join(dir, "secret.txt")
+    writeFileSync(input, "protected content")
+    runCli(["compress", input, "-o", compressed, "-p", "secret"])
+
+    expect(() => runCli(["decompress", compressed, "-o", join(dir, "out.txt")])).toThrow(
+      /password-protected/,
+    )
+  })
 })

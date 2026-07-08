@@ -8,6 +8,7 @@ Brotli-compress text or entire folder trees into a single base64 or Z85 base85 s
 - **Base64 (default)** — safe to paste anywhere (`A-Za-z0-9+/=`)
 - **Z85 base85** — ~8% smaller output; uses punctuation safe for code blocks
 - **Folder archives** — pack a whole directory tree (structure + file contents) into one string
+- **Password protection** — optionally encrypt compressed output with AES-256-GCM (`-p` / `--password`)
 - **CLI + library** — use from the terminal or import in your own scripts
 - **Learning docs** — glossary of concepts, patterns, and keywords with file references ([docs/LEARNING.md](docs/LEARNING.md))
 
@@ -41,8 +42,15 @@ tc compress ./my-project
 # Use base85 encoding (~8% smaller)
 tc compress notes.md -e 85
 
+# Password-protect the output (required to decompress)
+tc compress notes.md -p "my secret"
+tc compress ./my-project -p "my secret"
+
 # Decompress (auto-detects text vs folder)
 tc decompress output.txt
+
+# Decompress password-protected output
+tc decompress output.txt -p "my secret"
 ```
 
 During development:
@@ -65,20 +73,28 @@ import {
 const encoded = compress("hello world");          // base64 by default
 const restored = decompress(encoded);
 
+// Password-protected text
+const locked = compress("hello world", 64, "my secret");
+const unlocked = decompress(locked, 64, "my secret");
+
 // Folder
 const { encoded: folderBlob } = compressFolder("./my-project");
 decompressToPath(folderBlob, "./restored-project");
+
+// Password-protected folder
+const { encoded: lockedFolder } = compressFolder("./my-project", 64, "my secret");
+decompressToPath(lockedFolder, "./restored-project", 64, "my secret");
 ```
 
 ### API
 
 | Function | Description |
 |---|---|
-| `compress(text, encoding?)` | Compress UTF-8 text → encoded string (`64` or `85`) |
-| `decompress(encoded, encoding?)` | Decompress text payload → string |
-| `compressFolder(dirPath, encoding?)` | Pack folder → `{ encoded, fileCount, dirCount, ... }` |
-| `decompressToPath(encoded, destDir, encoding?)` | Unpack folder archive to disk |
-| `decompressPayload(encoded, encoding?)` | Low-level: returns `{ tag, data }` buffer |
+| `compress(text, encoding?, password?)` | Compress UTF-8 text → encoded string (`64` or `85`) |
+| `decompress(encoded, encoding?, password?)` | Decompress text payload → string |
+| `compressFolder(dirPath, encoding?, password?)` | Pack folder → `{ encoded, fileCount, dirCount, ... }` |
+| `decompressToPath(encoded, destDir, encoding?, password?)` | Unpack folder archive to disk |
+| `decompressPayload(encoded, encoding?, password?)` | Low-level: returns `{ tag, data }` buffer |
 
 ## Encoding options
 
@@ -88,6 +104,19 @@ decompressToPath(folderBlob, "./restored-project");
 | `85` | Z85 base85 | Slightly smaller; paste in contexts that preserve punctuation verbatim |
 
 Decompress must use the **same encoding** as compress.
+
+## Password protection
+
+Pass `-p` / `--password` on **compress** to encrypt the Brotli-compressed bytes with AES-256-GCM before encoding. The same password is required on **decompress**.
+
+- Omitting `-p` produces unencrypted output compatible with earlier versions.
+- Password-protected payloads cannot be decompressed without the correct password.
+- Works for text, files, and folder archives (including split output).
+
+```bash
+tc compress notes.md -p "my secret" -o locked.txt
+tc decompress locked.txt -p "my secret" -o notes.md
+```
 
 ## Development
 
@@ -107,6 +136,14 @@ For a learning-oriented glossary of every concept, pattern, and keyword used in 
 ## Change logs
 
 How this repo started and grew — each version builds on the last.
+
+### v1.0.4 — Password-protected compression
+
+**Date:** 2026-07-08
+
+- Added `-p` / `--password` CLI flag to encrypt compressed output with AES-256-GCM
+- Optional `password` parameter on library functions (`compress`, `decompress`, `compressFolder`, `decompressToPath`, `decompressPayload`)
+- Unencrypted payloads remain backward compatible with v1.0.3 and earlier
 
 ### v1.0.3 — Learning guide and formatting cleanup
 

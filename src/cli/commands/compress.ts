@@ -28,7 +28,7 @@ export async function runCompress(args: Args): Promise<void> {
       compressedBytes,
       outputPaths,
       splitChunkSize,
-    } = await compressFolderToPath(args.dir, outputPath, encoding, args.split)
+    } = await compressFolderToPath(args.dir, outputPath, encoding, args.split, args.password)
     const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6
     const ratio = originalBytes === 0 ? 0 : compressedBytes / originalBytes
 
@@ -57,7 +57,7 @@ export async function runCompress(args: Args): Promise<void> {
   const inputBytes = Buffer.byteLength(input, "utf-8")
 
   const start = process.hrtime.bigint()
-  const result = compress(input, encoding)
+  const result = compress(input, encoding, args.password)
   const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6
 
   const { paths: outputPaths, splitChunkSize } = writeCompressedOutput(

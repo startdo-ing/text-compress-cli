@@ -23,8 +23,8 @@ import type { Encoding } from "../types.js"
  * @param text - Input string (any Unicode code points).
  * @param encoding - `64` (Base64) or `85` (Z85); default Base64.
  */
-export function compress(text: string, encoding: Encoding = 64): string {
-  return compressTaggedPayload(TAG_TEXT, Buffer.from(text, "utf-8"), encoding)
+export function compress(text: string, encoding: Encoding = 64, password?: string): string {
+  return compressTaggedPayload(TAG_TEXT, Buffer.from(text, "utf-8"), encoding, password)
 }
 
 /**
@@ -32,8 +32,8 @@ export function compress(text: string, encoding: Encoding = 64): string {
  *
  * @throws If the payload is a folder archive (wrong tag).
  */
-export function decompress(encoded: string, encoding: Encoding = 64): string {
-  const raw = decompressPayload(encoded, encoding)
+export function decompress(encoded: string, encoding: Encoding = 64, password?: string): string {
+  const raw = decompressPayload(encoded, encoding, password)
   if (raw.tag !== TAG_TEXT) {
     throw new Error("This payload is a compressed folder, not text. Use decompressToPath.")
   }

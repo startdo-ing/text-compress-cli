@@ -33,6 +33,7 @@
 
 import { brotliDecompressSync } from "node:zlib"
 import { brotliCompress } from "../compression/brotli.js"
+import { decryptBuffer, encryptBuffer, isEncrypted } from "../crypto/password.js"
 import { decodeBuffer, encodeBuffer } from "../encoding/index.js"
 import type { Encoding } from "../types.js"
 
@@ -60,8 +61,16 @@ export function wrapPayload(tag: number, data: Buffer): Buffer {
 export function decompressPayload(
   encoded: string,
   encoding: Encoding,
+  password?: string,
 ): { tag: number; data: Buffer } {
-  const raw = brotliDecompressSync(decodeBuffer(encoded, encoding))
+  let decoded = decodeBuffer(encoded, encoding)
+  if (isEncrypted(decoded)) {
+    if (!password) {
+      throw new Error("This payload is password-protected. Pass -p/--password to decompress.")
+    }
+    decoded = decryptBuffer(decoded, password)
+  }
+  const raw = brotliDecompressSync(decoded)
   return { tag: raw[0], data: raw.subarray(1) }
 }
 
@@ -70,6 +79,15 @@ export function decompressPayload(
  *
  * Shared helper for text and folder compression paths.
  */
-export function compressTaggedPayload(tag: number, data: Buffer, encoding: Encoding): string {
-  return encodeBuffer(brotliCompress(wrapPayload(tag, data)), encoding)
+export function compressTaggedPayload(
+  tag: number,
+  data: Buffer,
+  encoding: Encoding,
+  password?: string,
+): string {
+  let compressed = brotliCompress(wrapPayload(tag, data))
+  if (password) {
+    compressed = encryptBuffer(compressed, password)
+  }
+  return encodeBuffer(compressed, encoding)
 }

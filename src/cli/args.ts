@@ -21,6 +21,7 @@ export interface Args {
   output?: string
   encoding?: string
   split?: number
+  password?: string
 }
 
 /** Reject multiple simultaneous input sources. */
@@ -58,6 +59,12 @@ export function parseArgs(argv: string[]): Args {
         throw new Error(`Invalid -s/--split "${value}". Use a positive integer character count.`)
       }
       args.split = split
+    } else if (arg === "-p" || arg === "--password") {
+      const value = argv[++i]
+      if (!value) {
+        throw new Error("Missing value for -p/--password.")
+      }
+      args.password = value
     } else if (!arg.startsWith("-")) {
       if (args.path !== undefined || args.text !== undefined || args.file || args.dir) {
         throw new Error("Multiple inputs specified. Pass one path, or use -t, -f, or -d.")

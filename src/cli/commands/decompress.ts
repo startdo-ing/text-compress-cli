@@ -37,7 +37,7 @@ export function runDecompress(args: Args): void {
   const { content: input, inputBytes, partPaths } = readCompressedInput(args)
 
   const start = process.hrtime.bigint()
-  const { tag, data } = decompressPayload(input.trim(), encoding)
+  const { tag, data } = decompressPayload(input.trim(), encoding, args.password)
   const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6
 
   if (tag === TAG_FOLDER) {

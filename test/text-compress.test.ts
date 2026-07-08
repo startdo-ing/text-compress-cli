@@ -69,6 +69,22 @@ describe("text compression", () => {
     const { encoded } = compressFolder(dir, 64)
     expect(() => decompress(encoded, 64)).toThrow(/compressed folder/)
   })
+
+  it("round-trips text with a password", () => {
+    const input = "Secret payload with password protection."
+    const password = "hunter2"
+    expect(decompress(compress(input, 64, password), 64, password)).toBe(input)
+  })
+
+  it("rejects password-protected payload without a password", () => {
+    const encoded = compress("secret", 64, "hunter2")
+    expect(() => decompress(encoded, 64)).toThrow(/password-protected/)
+  })
+
+  it("rejects password-protected payload with the wrong password", () => {
+    const encoded = compress("secret", 64, "hunter2")
+    expect(() => decompress(encoded, 64, "wrong")).toThrow(/Invalid password/)
+  })
 })
 
 describe("folder compression", () => {
@@ -109,6 +125,22 @@ describe("folder compression", () => {
     expect(result.fileCount).toBe(2)
     expect(result.dirCount).toBe(2)
     expect(result.originalBytes).toBe(3)
+  })
+
+  it("round-trips a folder tree with a password", () => {
+    const src = makeTempDir()
+    mkdirSync(join(src, "nested"))
+    writeFileSync(join(src, "readme.txt"), "hello")
+    writeFileSync(join(src, "nested", "data.json"), '{"x":1}')
+
+    const password = "folder-secret"
+    const { encoded } = compressFolder(src, 64, password)
+    const dest = makeTempDir()
+    const stats = decompressToPath(encoded, dest, 64, password)
+
+    expect(stats.files).toBe(2)
+    expect(readFileSync(join(dest, "readme.txt"), "utf-8")).toBe("hello")
+    expect(readFileSync(join(dest, "nested", "data.json"), "utf-8")).toBe('{"x":1}')
   })
 })
 

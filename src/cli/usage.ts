@@ -40,6 +40,8 @@ Options:
                              85: Z85 base85 — ~8% smaller, but uses extra
                                  punctuation; only paste it somewhere that
                                  preserves text verbatim (e.g. a code block)
+  -p, --password <string>  Password-protect the compressed output (optional).
+                           Required to decompress password-protected payloads.
   -h, --help               Show this usage guide
 
 Defaults:
@@ -55,7 +57,9 @@ Examples:
   tc compress notes.md -e 85
   tc compress ./my-project
   tc compress notes.md -s 4000
+  tc compress notes.md -p "my secret"
   tc decompress notes.txt
+  tc decompress notes.txt -p "my secret"
   tc decompress output.01.txt
   tc decompress my-project.txt
   tc decompress -t "<base64>" -o restored.txt

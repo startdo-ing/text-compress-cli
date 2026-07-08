@@ -24,10 +24,10 @@ import type { Encoding } from "../types.js"
  *
  * @returns Encoded blob plus statistics about the source folder.
  */
-export function compressFolder(dirPath: string, encoding: Encoding = 64) {
+export function compressFolder(dirPath: string, encoding: Encoding = 64, password?: string) {
   const entries = collectEntries(dirPath)
   const archive = serializeArchive(entries)
-  const encoded = compressTaggedPayload(TAG_FOLDER, archive, encoding)
+  const encoded = compressTaggedPayload(TAG_FOLDER, archive, encoding, password)
   const files = entries.filter((e) => e.type === "f")
   const originalBytes = files.reduce((sum, e) => sum + (e.content?.length ?? 0), 0)
   return {
@@ -44,8 +44,13 @@ export function compressFolder(dirPath: string, encoding: Encoding = 64) {
  *
  * @throws If the payload is text, not a folder archive.
  */
-export function decompressToPath(encoded: string, destDir: string, encoding: Encoding = 64) {
-  const { tag, data } = decompressPayload(encoded, encoding)
+export function decompressToPath(
+  encoded: string,
+  destDir: string,
+  encoding: Encoding = 64,
+  password?: string,
+) {
+  const { tag, data } = decompressPayload(encoded, encoding, password)
   if (tag !== TAG_FOLDER) {
     throw new Error("This payload is compressed text, not a folder. Use decompress.")
   }
