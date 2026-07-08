@@ -1,6 +1,6 @@
 {
-  "name": "@startdoing/tc",
-  "version": "1.0.4",
+  "name": "txtc",
+  "version": "2.0.0",
   "description": "Brotli-compress text or folders to base64/base85 strings for easy sharing",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,7 +12,7 @@
     }
   },
   "bin": {
-    "tc": "./dist/cli.js"
+    "txtc": "./dist/cli.js"
   },
   "files": [
     "dist"

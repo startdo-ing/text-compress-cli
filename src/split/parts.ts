@@ -7,9 +7,21 @@
  * This module splits a long encoded string into numbered part files and
  * reassembles them on read.
  *
- * ## Naming convention
+ * ## v2 split format
  *
- * Parts are inserted before the extension with zero-padded indices:
+ * Each logical part is prefixed with a 12-byte header so order is encoded in
+ * file content, not filenames:
+ *
+ * ```
+ *   [magic: "TCP\x02"][partIndex: u32le][totalParts: u32le][payload…]
+ * ```
+ *
+ * Every part carries `totalParts`, so any single valid part reveals how many
+ * logical parts exist. A physical file may contain one or more consecutive
+ * parts. Parts can be read in any file order, and adjacent part files can be
+ * merged into fewer files.
+ *
+ * ## Compress naming (unchanged)
  *
  * ```
  *   output.txt  →  output.1.txt, output.2.txt, … output.12.txt
@@ -19,19 +31,36 @@
  * Zero-padding width matches the total part count so lexical sort equals
  * numeric sort (`output.02.txt` before `output.10.txt`).
  *
+ * ## Decompress discovery
+ *
+ * Pass **any** sibling file. All files sharing the same prefix — the basename
+ * segment before the **first** `.` — are scanned (`file.1.md`, `file.7.txt`,
+ * … → prefix `file`). Extension and the numeric segment in the filename are
+ * ignored. Files without valid split headers are skipped.
+ *
  * ## Auto-split threshold
  *
  * When no explicit `-s` size is given, outputs longer than
- * {@link AUTO_SPLIT_CHARS} are automatically split. This default targets
- * common paste limits while keeping part counts manageable.
+ * {@link AUTO_SPLIT_CHARS} are automatically split.
  */
 
-import { existsSync, readdirSync, statSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { readTextFile } from "../fs/paths.js"
 
 /** Default character threshold for automatic output splitting. */
 export const AUTO_SPLIT_CHARS = 30_000
+
+/** Magic bytes identifying a v2 split chunk header. */
+export const SPLIT_MAGIC = Buffer.from([0x54, 0x43, 0x50, 0x02])
+
+const SPLIT_HEADER_SIZE = 12
+
+/** One parsed logical part from split file content. */
+export interface SplitChunk {
+  partIndex: number
+  totalParts: number
+  payload: string
+}
 
 /**
  * Decide whether and how to split encoded output.
@@ -67,6 +96,126 @@ export function splitString(value: string, chunkSize: number): string[] {
   return chunks
 }
 
+/** Build the 12-byte v2 split chunk header. */
+export function createSplitChunkHeader(partIndex: number, totalParts: number): Buffer {
+  const header = Buffer.alloc(SPLIT_HEADER_SIZE)
+  SPLIT_MAGIC.copy(header, 0)
+  header.writeUInt32LE(partIndex, 4)
+  header.writeUInt32LE(totalParts, 8)
+  return header
+}
+
+/**
+ * Wrap one encoded payload chunk with a v2 split header.
+ */
+export function wrapSplitChunk(partIndex: number, totalParts: number, payload: string): string {
+  return Buffer.concat([
+    createSplitChunkHeader(partIndex, totalParts),
+    Buffer.from(payload, "utf-8"),
+  ]).toString("utf-8")
+}
+
+function readSplitChunks(buf: Buffer): SplitChunk[] {
+  const chunks: SplitChunk[] = []
+  let offset = 0
+
+  while (offset < buf.length) {
+    if (buf.length - offset < SPLIT_HEADER_SIZE) {
+      throw new Error("Invalid split format: truncated chunk header.")
+    }
+    if (!buf.subarray(offset, offset + SPLIT_MAGIC.length).equals(SPLIT_MAGIC)) {
+      throw new Error("Invalid split format: unexpected data between split chunks.")
+    }
+
+    const partIndex = buf.readUInt32LE(offset + 4)
+    const totalParts = buf.readUInt32LE(offset + 8)
+    offset += SPLIT_HEADER_SIZE
+
+    const nextMagic = buf.indexOf(SPLIT_MAGIC, offset)
+    const end = nextMagic === -1 ? buf.length : nextMagic
+    const payload = buf.subarray(offset, end).toString("utf-8")
+    chunks.push({ partIndex, totalParts, payload })
+    offset = end
+  }
+
+  return chunks
+}
+
+/**
+ * Parse split chunks from a buffer when it starts with a split header.
+ *
+ * @returns `null` when the buffer is not split data or is malformed.
+ */
+export function tryParseSplitChunks(buf: Buffer): SplitChunk[] | null {
+  if (buf.length < SPLIT_HEADER_SIZE) return null
+  if (!buf.subarray(0, SPLIT_MAGIC.length).equals(SPLIT_MAGIC)) return null
+  try {
+    return readSplitChunks(buf)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Parse all logical parts from one file's bytes.
+ *
+ * Files without a leading split header are treated as a single unsplit payload.
+ */
+export function parseSplitBuffer(buf: Buffer): SplitChunk[] {
+  if (buf.length === 0) {
+    return [{ partIndex: 1, totalParts: 1, payload: "" }]
+  }
+
+  const splitChunks = tryParseSplitChunks(buf)
+  if (splitChunks) return splitChunks
+
+  return [{ partIndex: 1, totalParts: 1, payload: buf.toString("utf-8") }]
+}
+
+/**
+ * Reassemble logical parts into one encoded string.
+ *
+ * Uses `totalParts` from the chunk headers — any valid part reveals the full count.
+ *
+ * @throws If parts are missing, duplicated, or disagree on total count.
+ */
+export function assembleSplitChunks(chunks: SplitChunk[]): string {
+  if (chunks.length === 0) {
+    throw new Error("No split chunks found.")
+  }
+
+  if (chunks.length === 1 && chunks[0].totalParts === 1) {
+    return chunks[0].payload
+  }
+
+  const totalParts = chunks[0].totalParts
+  const byIndex = new Map<number, string>()
+
+  for (const chunk of chunks) {
+    if (chunk.totalParts !== totalParts) {
+      throw new Error("Split parts disagree on total part count.")
+    }
+    if (!Number.isInteger(chunk.partIndex) || chunk.partIndex < 1 || chunk.partIndex > totalParts) {
+      throw new Error(`Invalid split part index ${chunk.partIndex}.`)
+    }
+    if (byIndex.has(chunk.partIndex)) {
+      throw new Error(`Duplicate split part ${chunk.partIndex}.`)
+    }
+    byIndex.set(chunk.partIndex, chunk.payload)
+  }
+
+  const parts: string[] = []
+  for (let i = 1; i <= totalParts; i++) {
+    const payload = byIndex.get(i)
+    if (payload === undefined) {
+      throw new Error(`Missing split part ${i}.`)
+    }
+    parts.push(payload)
+  }
+
+  return parts.join("")
+}
+
 /**
  * Build the filesystem path for one part of a split output.
  *
@@ -88,93 +237,47 @@ export function formatSplitOutputPath(
   return `${outputPath}.${part}`
 }
 
-/** Split a filename into base name and extension (e.g. `"out.txt"` → `"out"`, `".txt"`). */
-function splitFilename(name: string): { baseName: string; extension: string } {
-  const dot = name.lastIndexOf(".")
-  if (dot <= 0) return { baseName: name, extension: "" }
-  return { baseName: name.slice(0, dot), extension: name.slice(dot) }
-}
-
-/**
- * Parse a split-part filename back into its components.
- *
- * @returns `null` if the path does not match the split naming pattern.
- */
-export function parseSplitPartPath(
-  filePath: string,
-): { baseName: string; partIndex: number; extension: string } | null {
+/** Basename segment before the first `.` — used to group split siblings on read. */
+export function extractFilenamePrefix(filePath: string): string {
   const slash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"))
   const name = filePath.slice(slash + 1)
-
-  const withExtension = name.match(/^(.+)\.(\d+)(\.[^.]+)$/)
-  if (withExtension) {
-    return {
-      baseName: withExtension[1],
-      partIndex: Number(withExtension[2]),
-      extension: withExtension[3],
-    }
-  }
-
-  const withoutExtension = name.match(/^(.+)\.(\d+)$/)
-  if (withoutExtension) {
-    return {
-      baseName: withoutExtension[1],
-      partIndex: Number(withoutExtension[2]),
-      extension: "",
-    }
-  }
-
-  return null
+  const dot = name.indexOf(".")
+  if (dot <= 0) return name
+  return name.slice(0, dot)
 }
 
 /**
- * List all part files for a split set in a directory, verifying contiguity.
+ * Return the filename prefix used to discover split siblings.
  *
- * @throws If any part number is missing (e.g. part 2 absent while part 3 exists).
+ * @deprecated Use {@link extractFilenamePrefix} instead.
  */
-function listSplitPartPaths(dir: string, baseName: string, extension: string): string[] {
-  const prefix = `${baseName}.`
-  const suffix = extension
+export function parseSplitPartPath(filePath: string): { prefix: string } {
+  return { prefix: extractFilenamePrefix(filePath) }
+}
 
-  const parts = readdirSync(dir)
-    .filter((name) => {
-      if (!name.startsWith(prefix) || !name.endsWith(suffix)) return false
-      const middle = name.slice(prefix.length, name.length - suffix.length)
-      return /^\d+$/.test(middle)
+/** List regular files in `dir` whose names start with `prefix.`. */
+function listPrefixSiblingPaths(dir: string, prefix: string): string[] {
+  const marker = `${prefix}.`
+  return readdirSync(dir)
+    .filter((name) => name.startsWith(marker))
+    .map((name) => join(dir, name))
+    .filter((path) => {
+      try {
+        return statSync(path).isFile()
+      } catch {
+        return false
+      }
     })
-    .map((name) => ({
-      path: join(dir, name),
-      partIndex: Number(name.slice(prefix.length, name.length - suffix.length)),
-    }))
-    .filter(({ path }) => statSync(path).isFile())
-    .sort((a, b) => a.partIndex - b.partIndex)
-
-  for (let i = 0; i < parts.length; i++) {
-    if (parts[i].partIndex !== i + 1) {
-      throw new Error(`Missing split part ${i + 1} for "${baseName}${extension}".`)
-    }
-  }
-
-  return parts.map((part) => part.path)
+    .sort()
 }
 
 /**
- * Resolve an input path to one or more part file paths.
+ * Resolve an input path to all prefix-sibling part files in the same directory.
  *
- * Accepts a single file, a split part (auto-discovers siblings), or a
- * non-existent path that matches a split naming pattern in its directory.
+ * Any sibling may be passed; discovery uses the prefix before the first `.`.
+ * Falls back to the input file alone when no `prefix.*` siblings exist.
  */
 export function resolveSplitInputPaths(inputPath: string): string[] {
-  const parsed = parseSplitPartPath(inputPath)
-  if (parsed) {
-    const dir = dirname(inputPath)
-    const paths = listSplitPartPaths(dir, parsed.baseName, parsed.extension)
-    if (paths.length === 0) {
-      throw new Error(`Split part not found: ${inputPath}`)
-    }
-    return paths
-  }
-
   if (existsSync(inputPath)) {
     const stat = statSync(inputPath)
     if (stat.isDirectory()) {
@@ -182,22 +285,18 @@ export function resolveSplitInputPaths(inputPath: string): string[] {
         `"${inputPath}" is a directory, not a compressed file. Pass the compressed .txt file.`,
       )
     }
-    if (stat.isFile()) {
-      return [inputPath]
+    if (!stat.isFile()) {
+      throw new Error(`Cannot read "${inputPath}": not a regular file.`)
     }
-    throw new Error(`Cannot read "${inputPath}": not a regular file.`)
   }
 
   const dir = dirname(inputPath)
-  const slash = Math.max(inputPath.lastIndexOf("/"), inputPath.lastIndexOf("\\"))
-  const name = inputPath.slice(slash + 1)
-  const { baseName, extension } = splitFilename(name)
+  const prefix = extractFilenamePrefix(inputPath)
+  const siblings = listPrefixSiblingPaths(dir, prefix)
+  if (siblings.length > 0) return siblings
 
-  try {
-    const paths = listSplitPartPaths(dir, baseName, extension)
-    if (paths.length > 0) return paths
-  } catch {
-    // Fall through to not-found error below.
+  if (existsSync(inputPath) && statSync(inputPath).isFile()) {
+    return [inputPath]
   }
 
   throw new Error(`Input file not found: ${inputPath}`)
@@ -205,12 +304,32 @@ export function resolveSplitInputPaths(inputPath: string): string[] {
 
 /**
  * Read and concatenate all parts for a split (or single) compressed input.
+ *
+ * Scans every prefix sibling, skips files without valid split headers, and
+ * reassembles using embedded part indices and `totalParts`. When no sibling
+ * contains split headers, reads the requested path as a single unsplit file.
  */
 export function readSplitInput(inputPath: string): {
   content: string
   partPaths: string[]
 } {
   const partPaths = resolveSplitInputPaths(inputPath)
-  const content = partPaths.map((path) => readTextFile(path, "decompress")).join("")
-  return { content, partPaths }
+  const chunks: SplitChunk[] = []
+
+  for (const path of partPaths) {
+    const parsed = tryParseSplitChunks(readFileSync(path))
+    if (parsed) chunks.push(...parsed)
+  }
+
+  if (chunks.length > 0) {
+    const content = assembleSplitChunks(chunks)
+    return { content, partPaths }
+  }
+
+  if (!existsSync(inputPath) || !statSync(inputPath).isFile()) {
+    throw new Error(`No valid split parts found for prefix "${extractFilenamePrefix(inputPath)}".`)
+  }
+
+  const content = assembleSplitChunks(parseSplitBuffer(readFileSync(inputPath)))
+  return { content, partPaths: [inputPath] }
 }

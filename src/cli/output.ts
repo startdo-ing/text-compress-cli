@@ -5,7 +5,12 @@
  */
 
 import { writeFileSync } from "node:fs"
-import { formatSplitOutputPath, resolveSplitChunkSize, splitString } from "../split/parts.js"
+import {
+  formatSplitOutputPath,
+  resolveSplitChunkSize,
+  splitString,
+  wrapSplitChunk,
+} from "../split/parts.js"
 
 /**
  * Write an encoded string to one file or multiple split part files.
@@ -22,9 +27,10 @@ export function writeCompressedOutput(
   }
 
   const chunks = splitString(encoded, splitChunkSize)
+  const totalParts = chunks.length
   const paths = chunks.map((chunk, index) => {
-    const partPath = formatSplitOutputPath(outputPath, index + 1, chunks.length)
-    writeFileSync(partPath, chunk, "utf-8")
+    const partPath = formatSplitOutputPath(outputPath, index + 1, totalParts)
+    writeFileSync(partPath, wrapSplitChunk(index + 1, totalParts, chunk), "utf-8")
     return partPath
   })
   return { paths, splitChunkSize }

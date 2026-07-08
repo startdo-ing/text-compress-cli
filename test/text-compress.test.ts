@@ -10,6 +10,7 @@ import {
   decompress,
   decompressPayload,
   decompressToPath,
+  extractFilenamePrefix,
   formatSplitOutputPath,
   parseSplitPartPath,
   readSplitInput,
@@ -19,6 +20,7 @@ import {
   splitString,
   TAG_TEXT,
   unpackDirectory,
+  wrapSplitChunk,
 } from "../src/index.js"
 
 const tempDirs: string[] = []
@@ -198,28 +200,129 @@ describe("split output", () => {
     const basePath = join(dir, "output.txt")
     const encoded = compress("split file round trip", 64)
     const chunks = splitString(encoded, 10)
+    const totalParts = chunks.length
 
     const paths = chunks.map((chunk, index) => {
-      const partPath = formatSplitOutputPath(basePath, index + 1, chunks.length)
-      writeFileSync(partPath, chunk, "utf-8")
+      const partPath = formatSplitOutputPath(basePath, index + 1, totalParts)
+      writeFileSync(partPath, wrapSplitChunk(index + 1, totalParts, chunk), "utf-8")
       return partPath
     })
 
-    expect(parseSplitPartPath(paths[0])).toEqual({
-      baseName: "output",
-      partIndex: 1,
-      extension: ".txt",
-    })
+    expect(parseSplitPartPath(paths[0])).toEqual({ prefix: "output" })
+    expect(extractFilenamePrefix(paths[2])).toBe("output")
     expect(resolveSplitInputPaths(paths[2])).toEqual(paths)
-    expect(readSplitInput(join(dir, "output.txt")).content).toBe(encoded)
+    expect(readSplitInput(paths[1]).content).toBe(encoded)
     expect(decompress(readSplitInput(paths[0]).content, 64)).toBe("split file round trip")
+  })
+
+  it("reassembles split output when filenames are shuffled", () => {
+    const dir = makeTempDir()
+    const basePath = join(dir, "output.txt")
+    const encoded = compress("shuffled split parts", 64)
+    const chunks = splitString(encoded, 12)
+    const totalParts = chunks.length
+
+    for (let index = 0; index < totalParts; index++) {
+      const shuffledIndex = totalParts - index
+      const partPath = formatSplitOutputPath(basePath, shuffledIndex, totalParts)
+      writeFileSync(partPath, wrapSplitChunk(index + 1, totalParts, chunks[index]), "utf-8")
+    }
+
+    expect(readSplitInput(join(dir, "output.1.txt")).content).toBe(encoded)
+    expect(decompress(readSplitInput(join(dir, "output.1.txt")).content, 64)).toBe(
+      "shuffled split parts",
+    )
+  })
+
+  it("reassembles split output merged into fewer files", () => {
+    const dir = makeTempDir()
+    const basePath = join(dir, "output.txt")
+    const encoded = compress("merged split parts", 64)
+    const chunks = splitString(encoded, 11)
+    const totalParts = chunks.length
+
+    const mergedPath = join(dir, "output.1.txt")
+    const mergedContent = [
+      wrapSplitChunk(1, totalParts, chunks[0]),
+      wrapSplitChunk(2, totalParts, chunks[1]),
+    ].join("")
+    writeFileSync(mergedPath, mergedContent, "utf-8")
+
+    for (let index = 2; index < totalParts; index++) {
+      const partPath = formatSplitOutputPath(basePath, index + 1, totalParts)
+      writeFileSync(partPath, wrapSplitChunk(index + 1, totalParts, chunks[index]), "utf-8")
+    }
+
+    expect(readSplitInput(mergedPath).content).toBe(encoded)
+    expect(decompress(readSplitInput(mergedPath).content, 64)).toBe("merged split parts")
+  })
+
+  it("reassembles split output merged into a single file", () => {
+    const dir = makeTempDir()
+    const encoded = compress("single merged file", 64)
+    const chunks = splitString(encoded, 9)
+    const totalParts = chunks.length
+    const mergedPath = join(dir, "all.txt")
+
+    writeFileSync(
+      mergedPath,
+      chunks.map((chunk, index) => wrapSplitChunk(index + 1, totalParts, chunk)).join(""),
+      "utf-8",
+    )
+
+    expect(readSplitInput(mergedPath).content).toBe(encoded)
+    expect(decompress(readSplitInput(mergedPath).content, 64)).toBe("single merged file")
   })
 
   it("errors when split parts are missing", () => {
     const dir = makeTempDir()
-    writeFileSync(join(dir, "output.1.txt"), "a")
-    writeFileSync(join(dir, "output.3.txt"), "c")
-    expect(() => resolveSplitInputPaths(join(dir, "output.1.txt"))).toThrow(/Missing split part 2/)
+    writeFileSync(join(dir, "output.1.txt"), wrapSplitChunk(1, 3, "a"))
+    writeFileSync(join(dir, "output.3.txt"), wrapSplitChunk(3, 3, "c"))
+    expect(() => readSplitInput(join(dir, "output.1.txt"))).toThrow(/Missing split part 2/)
+  })
+
+  it("discovers prefix siblings with shuffled names and skips invalid files", () => {
+    const dir = makeTempDir()
+    const encoded = compress(`prefix discovery ${"x".repeat(2000)}`, 64)
+    const chunks = splitString(encoded, 10)
+    expect(chunks.length).toBeGreaterThanOrEqual(3)
+    const totalParts = chunks.length
+
+    writeFileSync(join(dir, "file.1.md"), wrapSplitChunk(3, totalParts, chunks[2]), "utf-8")
+    writeFileSync(join(dir, "file.2.md"), "not valid split data", "utf-8")
+    writeFileSync(join(dir, "file.3.md"), wrapSplitChunk(2, totalParts, chunks[1]), "utf-8")
+    writeFileSync(join(dir, "file.7.md"), wrapSplitChunk(1, totalParts, chunks[0]), "utf-8")
+
+    for (let index = 3; index < totalParts; index++) {
+      const partPath = join(dir, `file.${index + 10}.md`)
+      writeFileSync(partPath, wrapSplitChunk(index + 1, totalParts, chunks[index]), "utf-8")
+    }
+
+    for (const entry of ["file.1.md", "file.2.md", "file.7.md"]) {
+      expect(readSplitInput(join(dir, entry)).content).toBe(encoded)
+      expect(decompress(readSplitInput(join(dir, entry)).content, 64)).toBe(
+        `prefix discovery ${"x".repeat(2000)}`,
+      )
+    }
+  })
+
+  it("discovers prefix siblings regardless of extension", () => {
+    const dir = makeTempDir()
+    const encoded = compress("mixed extensions", 64)
+    const chunks = splitString(encoded, 10)
+    const totalParts = chunks.length
+    const extensions = [".md", ".txt", ".bin", ".dat", ".z"]
+
+    for (let index = 0; index < totalParts; index++) {
+      const ext = extensions[index % extensions.length]
+      writeFileSync(
+        join(dir, `blob.${index + 1}${ext}`),
+        wrapSplitChunk(index + 1, totalParts, chunks[index]),
+        "utf-8",
+      )
+    }
+
+    expect(readSplitInput(join(dir, "blob.2.txt")).content).toBe(encoded)
   })
 
   it("auto-splits above 30,000 characters when -s is omitted", () => {

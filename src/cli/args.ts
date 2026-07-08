@@ -22,6 +22,8 @@ export interface Args {
   encoding?: string
   split?: number
   password?: string
+  /** Force compress or decompress instead of auto-detecting from input. */
+  mode?: "compress" | "decompress"
 }
 
 /** Reject multiple simultaneous input sources. */
@@ -65,6 +67,10 @@ export function parseArgs(argv: string[]): Args {
         throw new Error("Missing value for -p/--password.")
       }
       args.password = value
+    } else if (arg === "-C" || arg === "--compress") {
+      args.mode = "compress"
+    } else if (arg === "-D" || arg === "--decompress") {
+      args.mode = "decompress"
     } else if (!arg.startsWith("-")) {
       if (args.path !== undefined || args.text !== undefined || args.file || args.dir) {
         throw new Error("Multiple inputs specified. Pass one path, or use -t, -f, or -d.")
@@ -153,4 +159,10 @@ export function resolveEncoding(args: Args): Encoding {
   if (args.encoding === "64") return 64
   if (args.encoding === "85") return 85
   throw new Error(`Invalid -e/--encoding "${args.encoding}". Use 64 or 85.`)
+}
+
+/** Parse `-e` when set, otherwise `undefined` for auto-detection. */
+export function resolveEncodingOptional(args: Args): Encoding | undefined {
+  if (!args.encoding) return undefined
+  return resolveEncoding(args)
 }
