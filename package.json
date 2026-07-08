@@ -12,7 +12,7 @@
     }
   },
   "bin": {
-    "text-compress": "./dist/cli.js"
+    "text-compress": "dist/cli.js"
   },
   "files": [
     "dist"
