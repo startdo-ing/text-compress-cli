@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { parseSplitBuffer } from "../src/index.js"
 
 const cli = join(import.meta.dirname, "../dist/cli.js")
 const tempDirs: string[] = []
@@ -14,7 +15,7 @@ afterEach(() => {
 })
 
 function makeTempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "tc-cli-"))
+  const dir = mkdtempSync(join(tmpdir(), "text-compress-cli-"))
   tempDirs.push(dir)
   return dir
 }
@@ -23,16 +24,29 @@ function runCli(args: string[]): string {
   return execFileSync(process.execPath, [cli, ...args], { encoding: "utf-8" })
 }
 
-describe("cli path auto-detection", () => {
+describe("text-compress cli", () => {
   it("compresses a file from a bare path", () => {
     const dir = makeTempDir()
     const input = join(dir, "notes.md")
     const output = join(dir, "notes.txt")
     writeFileSync(input, "# hello")
 
-    runCli(["compress", input, "-o", output])
+    runCli([input, "-o", output])
 
     expect(readFileSync(output, "utf-8").length).toBeGreaterThan(0)
+  })
+
+  it("decompresses a compressed file without a subcommand", () => {
+    const dir = makeTempDir()
+    const input = join(dir, "notes.md")
+    const compressed = join(dir, "notes.txt")
+    const restored = join(dir, "notes.de.txt")
+    writeFileSync(input, "restore me")
+
+    runCli([input, "-o", compressed])
+    runCli([compressed, "-o", restored])
+
+    expect(readFileSync(restored, "utf-8")).toBe("restore me")
   })
 
   it("compresses a folder from a bare path", () => {
@@ -42,7 +56,7 @@ describe("cli path auto-detection", () => {
     writeFileSync(join(project, "readme.txt"), "hello")
     const output = join(dir, "project.txt")
 
-    runCli(["compress", project, "-o", output])
+    runCli([project, "-o", output])
 
     expect(readFileSync(output, "utf-8").length).toBeGreaterThan(0)
   })
@@ -57,33 +71,20 @@ describe("cli path auto-detection", () => {
     const output = join(dir, "project.txt")
     const restored = join(dir, "restored")
 
-    runCli(["compress", project, "-o", output])
-    runCli(["decompress", output, "-o", restored])
+    runCli([project, "-o", output])
+    runCli([output, "-o", restored])
 
     expect(readFileSync(join(restored, "readme.txt"), "utf-8")).toBe("hello")
     expect(() => readFileSync(join(restored, "debug.log"), "utf-8")).toThrow()
   })
 
-  it("decompresses from a bare path", () => {
-    const dir = makeTempDir()
-    const input = join(dir, "notes.md")
-    const compressed = join(dir, "notes.txt")
-    const restored = join(dir, "notes.de.txt")
-    writeFileSync(input, "restore me")
-
-    runCli(["compress", input, "-o", compressed])
-    runCli(["decompress", compressed, "-o", restored])
-
-    expect(readFileSync(restored, "utf-8")).toBe("restore me")
-  })
-
-  it("treats a missing compress path as inline text", () => {
+  it("treats a missing path as inline text on compress", () => {
     const dir = makeTempDir()
     const output = join(dir, "inline.txt")
 
-    runCli(["compress", "inline payload", "-o", output])
+    runCli(["inline payload", "-o", output])
+    runCli([output, "-o", join(dir, "inline.de.txt")])
 
-    runCli(["decompress", output, "-o", join(dir, "inline.de.txt")])
     expect(readFileSync(join(dir, "inline.de.txt"), "utf-8")).toBe("inline payload")
   })
 
@@ -93,11 +94,12 @@ describe("cli path auto-detection", () => {
     const payload = Array.from({ length: 8_000 }, (_, i) => `line ${i} varied ${i * i}\n`).join("")
     writeFileSync(input, payload)
 
-    runCli(["compress", input, "-o", join(dir, "large-out.txt")])
+    runCli([input, "-o", join(dir, "large-out.txt")])
 
-    expect(readFileSync(join(dir, "large-out.1.txt"), "utf-8").length).toBeLessThanOrEqual(30_000)
+    const part1 = parseSplitBuffer(readFileSync(join(dir, "large-out.1.txt")))
+    expect(part1[0].payload.length).toBeLessThanOrEqual(30_000)
     expect(readFileSync(join(dir, "large-out.2.txt"), "utf-8").length).toBeGreaterThan(0)
-    runCli(["decompress", join(dir, "large-out.1.txt"), "-o", join(dir, "large-restored.txt")])
+    runCli([join(dir, "large-out.1.txt"), "-o", join(dir, "large-restored.txt")])
     expect(readFileSync(join(dir, "large-restored.txt"), "utf-8")).toBe(payload)
   })
 
@@ -109,8 +111,8 @@ describe("cli path auto-detection", () => {
     const password = "cli-password"
     writeFileSync(input, "protected content")
 
-    runCli(["compress", input, "-o", compressed, "-p", password])
-    runCli(["decompress", compressed, "-o", restored, "-p", password])
+    runCli([input, "-o", compressed, "-p", password])
+    runCli([compressed, "-o", restored, "-p", password])
 
     expect(readFileSync(restored, "utf-8")).toBe("protected content")
   })
@@ -124,8 +126,8 @@ describe("cli path auto-detection", () => {
     mkdirSync(project)
     writeFileSync(join(project, "readme.txt"), "hello")
 
-    runCli(["compress", project, "-o", output, "-p", password])
-    runCli(["decompress", output, "-o", restored, "-p", password])
+    runCli([project, "-o", output, "-p", password])
+    runCli([output, "-o", restored, "-p", password])
 
     expect(readFileSync(join(restored, "readme.txt"), "utf-8")).toBe("hello")
   })
@@ -135,10 +137,37 @@ describe("cli path auto-detection", () => {
     const input = join(dir, "secret.md")
     const compressed = join(dir, "secret.txt")
     writeFileSync(input, "protected content")
-    runCli(["compress", input, "-o", compressed, "-p", "secret"])
+    runCli([input, "-o", compressed, "-p", "secret"])
 
-    expect(() => runCli(["decompress", compressed, "-o", join(dir, "out.txt")])).toThrow(
-      /password-protected/,
+    expect(() => runCli([compressed, "-o", join(dir, "out.txt")])).toThrow(/password-protected/)
+  })
+
+  it("supports legacy compress/decompress subcommands", () => {
+    const dir = makeTempDir()
+    const input = join(dir, "legacy.md")
+    const compressed = join(dir, "legacy.txt")
+    const restored = join(dir, "legacy.de.txt")
+    writeFileSync(input, "legacy path")
+
+    runCli(["compress", input, "-o", compressed])
+    runCli(["decompress", compressed, "-o", restored])
+
+    expect(readFileSync(restored, "utf-8")).toBe("legacy path")
+  })
+
+  it("forces compress with --compress", () => {
+    const dir = makeTempDir()
+    const input = join(dir, "notes.md")
+    const compressed = join(dir, "notes.txt")
+    const double = join(dir, "double.txt")
+    writeFileSync(input, "hello")
+
+    runCli([input, "-o", compressed])
+    runCli(["--compress", compressed, "-o", double])
+
+    expect(readFileSync(double, "utf-8")).not.toBe(readFileSync(compressed, "utf-8"))
+    expect(readFileSync(double, "utf-8").length).toBeGreaterThan(
+      readFileSync(compressed, "utf-8").length,
     )
   })
 })

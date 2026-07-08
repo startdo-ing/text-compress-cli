@@ -1,7 +1,7 @@
 /**
  * @module cli/commands/decompress
  *
- * `tc decompress` command — decode and restore text or folder payloads.
+ * `text-compress` decompress path — decode and restore text or folder payloads.
  */
 
 import { writeFileSync } from "node:fs"
@@ -9,7 +9,8 @@ import { unpackDirectory } from "../../archive/unpack.js"
 import { decompressPayload, TAG_FOLDER, TAG_TEXT } from "../../payload/tags.js"
 import { readSplitInput } from "../../split/parts.js"
 import { printAnalytics } from "../analytics.js"
-import { type Args, readInput, resolveEncoding } from "../args.js"
+import { type Args, readInput, resolveEncoding, resolveEncodingOptional } from "../args.js"
+import { resolveDetectedEncoding } from "../detect.js"
 import { resolveOutputPath } from "../paths.js"
 
 /** Read compressed input from file (with split support) or inline text. */
@@ -33,8 +34,10 @@ function readCompressedInput(args: Args): {
 
 /** Execute the decompress subcommand. */
 export function runDecompress(args: Args): void {
-  const encoding = resolveEncoding(args)
   const { content: input, inputBytes, partPaths } = readCompressedInput(args)
+  const encoding = resolveEncodingOptional(args)
+    ? resolveEncoding(args)
+    : resolveDetectedEncoding(input, undefined, args.password)
 
   const start = process.hrtime.bigint()
   const { tag, data } = decompressPayload(input.trim(), encoding, args.password)

@@ -7,7 +7,7 @@
  *
  * @example
  * ```ts
- * import { compress, decompress, compressFolder } from "@startdoing/tc";
+ * import { compress, decompress, compressFolder } from "text-compress";
  * ```
  */
 
@@ -22,15 +22,22 @@ export { unpackDirectory } from "./archive/unpack.js"
 export { assertDirectory, readTextFile } from "./fs/paths.js"
 // Low-level payload access
 export { decompressPayload, TAG_FOLDER, TAG_TEXT } from "./payload/tags.js"
-
+export type { SplitChunk } from "./split/parts.js"
 // Split-file helpers
 export {
   AUTO_SPLIT_CHARS,
+  assembleSplitChunks,
+  createSplitChunkHeader,
+  extractFilenamePrefix,
   formatSplitOutputPath,
+  parseSplitBuffer,
   parseSplitPartPath,
   readSplitInput,
   resolveSplitChunkSize,
   resolveSplitInputPaths,
+  SPLIT_MAGIC,
   splitString,
+  tryParseSplitChunks,
+  wrapSplitChunk,
 } from "./split/parts.js"
 export type { Encoding } from "./types.js"

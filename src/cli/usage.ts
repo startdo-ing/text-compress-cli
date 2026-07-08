@@ -1,33 +1,30 @@
 /**
  * @module cli/usage
  *
- * Help text for the `tc` CLI.
+ * Help text for the `text-compress` CLI.
  */
 
 /** Print usage guide to stdout. */
 export function printUsage() {
   console.log(`
-tc - brotli (max quality) compress/decompress with base64 or base85 output
+text-compress - brotli (max quality) compress/decompress with base64 or base85 output
 
 Usage:
-  tc <command> [options]
+  text-compress [path|options]
+  npx text-compress <path> [options]
 
-Commands:
-  compress      Brotli-compress the input (max quality), encode it, and
-                write it to a file. Pass a path to auto-detect file vs
-                folder, or use -t for inline text. Folder compression
-                automatically applies .gitignore rules (outside → inside).
-  decompress    Decode the input, brotli-decompress it, and write the
-                result. Pass a path to the compressed file; auto-detects
-                split parts (e.g. output.01.txt) and whether the payload
-                was text or a packed folder. Must use the same -e/--encoding
-                as the compress step.
+Auto-detect:
+  Pass a file or folder path with no subcommand. Plain files and folders are
+  compressed; valid compressed payloads are decompressed automatically.
+  Folders are always compressed.
 
 Options:
-  <path>                  Input path (auto-detects file vs folder on compress)
+  <path>                  Input path (auto-detects file vs folder)
   -t, --text <string>     Input given directly as a string
   -f, --file <path>       Input file (optional; same as passing <path>)
   -d, --dir <path>        Input folder (optional; same as passing <path>)
+  -C, --compress          Always compress (even if input looks compressed)
+  -D, --decompress        Always decompress
   -o, --output <path>     Output path (optional, see defaults below)
   -s, --split <chars>     Split compressed output into multiple files, each
                            at most this many characters (compress only).
@@ -40,9 +37,13 @@ Options:
                              85: Z85 base85 — ~8% smaller, but uses extra
                                  punctuation; only paste it somewhere that
                                  preserves text verbatim (e.g. a code block)
-  -p, --password <string>  Password-protect the compressed output (optional).
-                           Required to decompress password-protected payloads.
+  -p, --password <string>  Password-protect on compress, or unlock on decompress
   -h, --help               Show this usage guide
+
+Split output (decompress):
+  Pass any one sibling file. All files sharing the same basename prefix
+  (segment before the first ".") are scanned; invalid siblings are skipped.
+  Part order comes from embedded headers, not filenames.
 
 Defaults:
   If -o is omitted, the output path is derived from the input's name:
@@ -52,19 +53,21 @@ Defaults:
     decompress (folder):  <input>.de   (recreated as a directory)
 
 Examples:
-  tc compress -t "some text" -o output.txt
-  tc compress notes.md
-  tc compress notes.md -e 85
-  tc compress ./my-project
-  tc compress notes.md -s 4000
-  tc compress notes.md -p "my secret"
-  tc decompress notes.txt
-  tc decompress notes.txt -p "my secret"
-  tc decompress output.01.txt
-  tc decompress my-project.txt
-  tc decompress -t "<base64>" -o restored.txt
+  text-compress notes.md
+  text-compress notes.md -p "my secret"
+  text-compress ./my-project
+  text-compress notes.md -e 85
+  text-compress notes.md -s 4000
+  text-compress output.txt
+  text-compress output.txt -p "my secret"
+  text-compress output.01.txt
+  text-compress -t "some text" -o output.txt
+  text-compress --compress notes.txt
+  npx text-compress ./somefile.md -p "hello-world"
 
 Every run prints analytics (encoding, size, ratio, time taken) after
 writing the output.
+
+v1 CLI (@startdoing/tc) remains on npm at 1.0.4. v2 is published as text-compress.
 `)
 }

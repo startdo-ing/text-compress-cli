@@ -1,6 +1,8 @@
 # Architecture Guide
 
-This document explains how `@startdoing/tc` is structured, the algorithms it uses, and the design patterns behind each layer. It is written for developers who want to learn from or extend the codebase.
+This document explains how `text-compress` is structured, the algorithms it uses, and the design patterns behind each layer. It is written for developers who want to learn from or extend the codebase.
+
+> **Package note:** v2 is published as [`text-compress`](https://www.npmjs.com/package/text-compress). v1 remains [`@startdoing/tc@1.0.4`](https://www.npmjs.com/package/@startdoing/tc).
 
 ## What this project does
 
@@ -151,7 +153,11 @@ When encoded output exceeds 30,000 characters (or a user `-s` limit), it is spli
 output.txt → output.1.txt, output.2.txt, …
 ```
 
-Zero-padding width matches total part count so lexical sort equals numeric sort.
+Each logical part is prefixed with a `TCP\x02` header carrying `partIndex` and `totalParts`, so reassembly does not depend on filename order. A physical file may contain multiple consecutive parts, and adjacent part files can be merged into fewer files before decompress.
+
+On decompress, pass any sibling file. All files whose basename starts with the same prefix (segment before the first `.`) are scanned; extension is ignored and invalid siblings are skipped.
+
+Zero-padding width matches total part count on compress (filenames unchanged from v1).
 
 **Module:** `src/split/parts.ts`
 

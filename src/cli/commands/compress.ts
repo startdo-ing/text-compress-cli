@@ -1,7 +1,7 @@
 /**
  * @module cli/commands/compress
  *
- * `tc compress` command — Brotli-compress input and write encoded output.
+ * `text-compress` command — Brotli-compress input and write encoded output.
  */
 
 import { compress } from "../../api/text.js"

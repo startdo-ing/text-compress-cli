@@ -51,7 +51,11 @@ import { estimatedEncodedLength } from "../encoding/index.js"
 import { encodeBase85 } from "../encoding/z85.js"
 import { walkDirectory } from "../fs/walk.js"
 import { TAG_FOLDER } from "../payload/tags.js"
-import { formatSplitOutputPath, resolveSplitChunkSize } from "../split/parts.js"
+import {
+  createSplitChunkHeader,
+  formatSplitOutputPath,
+  resolveSplitChunkSize,
+} from "../split/parts.js"
 import type { Encoding } from "../types.js"
 
 /** Buffer size when copying file content into the archive. */
@@ -136,6 +140,7 @@ async function brotliCompressFile(inputPath: string, outputPath: string): Promis
 function openPart(outputPath: string, partIndex: number, totalParts: number) {
   const path = formatSplitOutputPath(outputPath, partIndex, totalParts)
   const fd = openSync(path, "w")
+  writeSync(fd, createSplitChunkHeader(partIndex, totalParts))
   return { path, fd }
 }
 
