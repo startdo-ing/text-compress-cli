@@ -15,7 +15,7 @@ afterEach(() => {
 })
 
 function makeTempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "txtc-cli-"))
+  const dir = mkdtempSync(join(tmpdir(), "text-compress-cli-"))
   tempDirs.push(dir)
   return dir
 }
@@ -24,7 +24,7 @@ function runCli(args: string[]): string {
   return execFileSync(process.execPath, [cli, ...args], { encoding: "utf-8" })
 }
 
-describe("txtc cli", () => {
+describe("text-compress cli", () => {
   it("compresses a file from a bare path", () => {
     const dir = makeTempDir()
     const input = join(dir, "notes.md")

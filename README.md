@@ -1,8 +1,8 @@
-# txtc
+# text-compress
 
 Brotli-compress text or entire folder trees into pasteable base64 or Z85 strings — ideal for chat, email, or code.
 
-**v2** ships as [`txtc`](https://www.npmjs.com/package/txtc). The original CLI [`@startdoing/tc`](https://www.npmjs.com/package/@startdoing/tc) stays frozen at **v1.0.4**.
+**v2** ships as [`text-compress`](https://www.npmjs.com/package/text-compress). The original CLI [`@startdoing/tc`](https://www.npmjs.com/package/@startdoing/tc) stays frozen at **v1.0.4**.
 
 ## Features
 
@@ -13,18 +13,18 @@ Brotli-compress text or entire folder trees into pasteable base64 or Z85 strings
 - **Folder archives** — pack a directory tree into one string
 - **Password protection** — AES-256-GCM (`-p` / `--password`)
 - **v2 split parts** — self-describing parts; shuffled names, merged files, any sibling as entry
-- **CLI + library** — terminal or `import from "txtc"`
+- **CLI + library** — terminal or `import from "text-compress"`
 
 ## Install
 
 ```bash
-npm install -g txtc
+npm install -g text-compress
 ```
 
 Or run without installing:
 
 ```bash
-npx txtc ./notes.md
+npx text-compress ./notes.md
 ```
 
 Local development:
@@ -39,36 +39,36 @@ npm run build
 
 ## CLI
 
-No `compress` / `decompress` subcommand — **txtc** picks the operation from the input.
+No `compress` / `decompress` subcommand — the CLI picks the operation from the input.
 
 ```bash
 # Compress a file
-txtc ./notes.md
+text-compress ./notes.md
 
 # Compress with password
-txtc ./notes.md -p "hello-world"
+text-compress ./notes.md -p "hello-world"
 
 # Decompress (auto-detected from valid compressed output)
-txtc ./notes.txt -p "hello-world"
+text-compress ./notes.txt -p "hello-world"
 
 # Compress a folder
-txtc ./my-project
+text-compress ./my-project
 
 # Base85 encoding (~8% smaller)
-txtc ./notes.md -e 85
+text-compress ./notes.md -e 85
 
 # Split large output
-txtc ./large-file.txt -s 4000
+text-compress ./large-file.txt -s 4000
 
 # Inline text
-txtc -t "hello world" -o output.txt
+text-compress -t "hello world" -o output.txt
 
 # Force mode when auto-detect is wrong
-txtc --compress ./looks-compressed.txt
-txtc --decompress ./plain.md   # errors if not valid payload
+text-compress --compress ./looks-compressed.txt
+text-compress --decompress ./plain.md   # errors if not valid payload
 
 # Split set — pass any sibling
-txtc ./output.7.txt
+text-compress ./output.7.txt
 ```
 
 During development:
@@ -95,7 +95,7 @@ import {
   decompress,
   compressFolder,
   decompressToPath,
-} from "txtc";
+} from "text-compress";
 
 const encoded = compress("hello world");
 const restored = decompress(encoded);
@@ -122,13 +122,13 @@ decompressToPath(folderBlob, "./restored-project");
 | `64` (default) | Base64 | Paste anywhere |
 | `85` | Z85 | Slightly smaller; paste in code blocks |
 
-Use the same encoding for compress and decompress. When `-e` is omitted on decompress, **txtc** tries both.
+Use the same encoding for compress and decompress. When `-e` is omitted on decompress, the CLI tries both.
 
 ## Password protection
 
 ```bash
-txtc ./notes.md -p "my secret" -o locked.txt
-txtc ./locked.txt -p "my secret" -o notes.md
+text-compress ./notes.md -p "my secret" -o locked.txt
+text-compress ./locked.txt -p "my secret" -o notes.md
 ```
 
 Password-protected payloads error without `-p` (they are **not** silently re-compressed).
@@ -148,11 +148,11 @@ On decompress:
 
 ## Migration from @startdoing/tc v1
 
-| v1 (`@startdoing/tc@1.0.4`) | v2 (`txtc`) |
+| v1 (`@startdoing/tc@1.0.4`) | v2 (`text-compress`) |
 |---|---|
-| `tc compress notes.md` | `txtc notes.md` |
-| `tc decompress out.txt` | `txtc out.txt` |
-| `import from "@startdoing/tc"` | `import from "txtc"` |
+| `tc compress notes.md` | `text-compress notes.md` |
+| `tc decompress out.txt` | `text-compress out.txt` |
+| `import from "@startdoing/tc"` | `import from "text-compress"` |
 | Raw split parts | Headered split parts |
 
 ## Development
@@ -168,11 +168,11 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEA
 
 ## Changelog
 
-### v2.0.0 — `txtc` (2026-07-08)
+### v2.0.0 — `text-compress` (2026-07-08)
 
-- New npm package **`txtc`** (v1 remains `@startdoing/tc@1.0.4`)
+- New npm package **`text-compress`** (v1 remains `@startdoing/tc@1.0.4`)
 - Auto-detect compress vs decompress from input
-- Shorter CLI: `txtc ./file.md` (no subcommand)
+- Shorter CLI: `text-compress ./file.md` (no subcommand)
 - Self-describing split format (`TCP\x02` headers)
 - Prefix-based split discovery; skip invalid siblings
 - Force flags: `--compress` / `--decompress`

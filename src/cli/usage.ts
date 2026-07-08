@@ -1,17 +1,17 @@
 /**
  * @module cli/usage
  *
- * Help text for the `txtc` CLI.
+ * Help text for the `text-compress` CLI.
  */
 
 /** Print usage guide to stdout. */
 export function printUsage() {
   console.log(`
-txtc - brotli (max quality) compress/decompress with base64 or base85 output
+text-compress - brotli (max quality) compress/decompress with base64 or base85 output
 
 Usage:
-  txtc [path|options]
-  npx txtc <path> [options]
+  text-compress [path|options]
+  npx text-compress <path> [options]
 
 Auto-detect:
   Pass a file or folder path with no subcommand. Plain files and folders are
@@ -53,21 +53,21 @@ Defaults:
     decompress (folder):  <input>.de   (recreated as a directory)
 
 Examples:
-  txtc notes.md
-  txtc notes.md -p "my secret"
-  txtc ./my-project
-  txtc notes.md -e 85
-  txtc notes.md -s 4000
-  txtc output.txt
-  txtc output.txt -p "my secret"
-  txtc output.01.txt
-  txtc -t "some text" -o output.txt
-  txtc --compress notes.txt
-  npx txtc ./somefile.md -p "hello-world"
+  text-compress notes.md
+  text-compress notes.md -p "my secret"
+  text-compress ./my-project
+  text-compress notes.md -e 85
+  text-compress notes.md -s 4000
+  text-compress output.txt
+  text-compress output.txt -p "my secret"
+  text-compress output.01.txt
+  text-compress -t "some text" -o output.txt
+  text-compress --compress notes.txt
+  npx text-compress ./somefile.md -p "hello-world"
 
 Every run prints analytics (encoding, size, ratio, time taken) after
 writing the output.
 
-v1 CLI (@startdoing/tc) remains on npm at 1.0.4. v2 is published as txtc.
+v1 CLI (@startdoing/tc) remains on npm at 1.0.4. v2 is published as text-compress.
 `)
 }

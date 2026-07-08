@@ -1,8 +1,8 @@
 # Architecture Guide
 
-This document explains how `txtc` is structured, the algorithms it uses, and the design patterns behind each layer. It is written for developers who want to learn from or extend the codebase.
+This document explains how `text-compress` is structured, the algorithms it uses, and the design patterns behind each layer. It is written for developers who want to learn from or extend the codebase.
 
-> **Package note:** v2 is published as [`txtc`](https://www.npmjs.com/package/txtc). v1 remains [`@startdoing/tc@1.0.4`](https://www.npmjs.com/package/@startdoing/tc).
+> **Package note:** v2 is published as [`text-compress`](https://www.npmjs.com/package/text-compress). v1 remains [`@startdoing/tc@1.0.4`](https://www.npmjs.com/package/@startdoing/tc).
 
 ## What this project does
 

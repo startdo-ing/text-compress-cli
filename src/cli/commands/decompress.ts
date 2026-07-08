@@ -1,7 +1,7 @@
 /**
  * @module cli/commands/decompress
  *
- * `txtc` decompress path — decode and restore text or folder payloads.
+ * `text-compress` decompress path — decode and restore text or folder payloads.
  */
 
 import { writeFileSync } from "node:fs"

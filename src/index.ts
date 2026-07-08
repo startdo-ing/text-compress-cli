@@ -7,7 +7,7 @@
  *
  * @example
  * ```ts
- * import { compress, decompress, compressFolder } from "txtc";
+ * import { compress, decompress, compressFolder } from "text-compress";
  * ```
  */
 
