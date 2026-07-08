@@ -168,6 +168,11 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEA
 
 ## Changelog
 
+### v2.0.1 — `text-compress` (2026-07-08)
+
+- Republish as **`text-compress@2.0.1`** (npm name finalized after `txtc` rejection)
+- Normalized `bin` path for npm publish
+
 ### v2.0.0 — `text-compress` (2026-07-08)
 
 - New npm package **`text-compress`** (v1 remains `@startdoing/tc@1.0.4`)
