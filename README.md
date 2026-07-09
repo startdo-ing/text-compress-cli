@@ -184,6 +184,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEA
 
 ## Changelog
 
+### v2.0.3 — `text-compress` (2026-07-09)
+
+- Use printable ASCII `;TCP2;` split headers so part files stay copyable in text editors (legacy binary `TCP\x02` headers still accepted on read)
+- Apply `-s` / auto-split limits to the full part file size, including the header
+- Add Husky git hooks (`pre-commit`: lint + typecheck, `pre-push`: check + test)
+
 ### v2.0.2 — `text-compress` (2026-07-09)
 
 - Ship [TanStack Intent](https://tanstack.com/intent/latest/docs/overview) agent skills (`core`, `cli`, `library`) inside the npm package
@@ -199,7 +205,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEA
 - New npm package **`text-compress`** (v1 remains `@startdoing/tc@1.0.4`)
 - Auto-detect compress vs decompress from input
 - Shorter CLI: `text-compress ./file.md` (no subcommand)
-- Self-describing split format (ASCII `;TCP2;` headers)
+- Self-describing split format (`TCP\x02` headers)
 - Prefix-based split discovery; skip invalid siblings
 - Force flags: `--compress` / `--decompress`
 
