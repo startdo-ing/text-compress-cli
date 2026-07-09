@@ -14,12 +14,16 @@ Brotli-compress text or entire folder trees into pasteable base64 or Z85 strings
 - **Password protection** — AES-256-GCM (`-p` / `--password`)
 - **v2 split parts** — self-describing parts; shuffled names, merged files, any sibling as entry
 - **CLI + library** — terminal or `import from "text-compress"`
+- **Agent skills** — versioned [TanStack Intent](https://tanstack.com/intent/latest/docs/overview) skills ship with the package for AI coding agents
 
 ## Install
 
 ```bash
 npm install -g text-compress
 ```
+
+If you use an AI coding agent, run `npx @tanstack/intent@latest install` in your
+project to load versioned skills shipped with this package.
 
 Or run without installing:
 
@@ -167,6 +171,11 @@ npm run check
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEARNING.md).
 
 ## Changelog
+
+### v2.0.2 — `text-compress` (2026-07-09)
+
+- Ship [TanStack Intent](https://tanstack.com/intent/latest/docs/overview) agent skills (`core`, `cli`, `library`) inside the npm package
+- Add `check-skills` CI workflow and `npm run validate:skills`
 
 ### v2.0.1 — `text-compress` (2026-07-08)
 

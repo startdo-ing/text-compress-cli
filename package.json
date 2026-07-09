@@ -1,6 +1,6 @@
 {
   "name": "text-compress",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Brotli-compress text or folders to base64/base85 strings for easy sharing",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,16 +15,19 @@
     "text-compress": "dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills",
+    "!skills/_artifacts"
   ],
   "scripts": {
     "build": "tsc",
-    "check": "biome check --write . && tsc",
+    "check": "biome check --write . && tsc && npm run validate:skills",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "pretest": "npm run build",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "validate:skills": "intent validate"
   },
   "keywords": [
     "brotli",
@@ -33,7 +36,8 @@
     "base85",
     "z85",
     "text",
-    "archive"
+    "archive",
+    "tanstack-intent"
   ],
   "repository": {
     "type": "git",
@@ -48,11 +52,12 @@
     "node": ">=18"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.2",
-    "@types/node": "^26.1.0",
-    "tsx": "^4.19.4",
-    "typescript": "7.0.1-rc",
-    "vitest": "^4.1.9"
+    "@biomejs/biome": "^2.5.3",
+    "@tanstack/intent": "^0.3.5",
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "ignore": "^7.0.5"
