@@ -35,9 +35,12 @@ export {
   readSplitInput,
   resolveSplitChunkSize,
   resolveSplitInputPaths,
+  resolveSplitPartCount,
   SPLIT_MAGIC,
+  splitEncodedIntoWrappedParts,
   splitString,
   tryParseSplitChunks,
   wrapSplitChunk,
+  writeEncodedOutput,
 } from "./split/parts.js"
 export type { Encoding } from "./types.js"

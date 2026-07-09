@@ -21,13 +21,17 @@
   ],
   "scripts": {
     "build": "tsc",
-    "check": "biome check --write . && tsc && npm run validate:skills",
+    "check": "biome check --write . && tsc && bun run validate:skills",
+    "check:ci": "biome check . && tsc && bun run validate:skills",
     "dev": "tsx src/cli.ts",
+    "lint": "biome check .",
+    "typecheck": "tsc",
     "test": "vitest run",
     "pretest": "npm run build",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build",
-    "validate:skills": "intent validate"
+    "validate:skills": "intent validate",
+    "prepare": "husky"
   },
   "keywords": [
     "brotli",
@@ -55,6 +59,7 @@
     "@biomejs/biome": "^2.5.3",
     "@tanstack/intent": "^0.3.5",
     "@types/node": "^26.1.1",
+    "husky": "^9.1.7",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"

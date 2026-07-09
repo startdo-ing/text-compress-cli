@@ -17,6 +17,8 @@ import {
   readTextFile,
   resolveSplitChunkSize,
   resolveSplitInputPaths,
+  SPLIT_MAGIC,
+  splitEncodedIntoWrappedParts,
   splitString,
   TAG_TEXT,
   unpackDirectory,
@@ -329,6 +331,71 @@ describe("split output", () => {
     expect(resolveSplitChunkSize(30_000)).toBeUndefined()
     expect(resolveSplitChunkSize(30_001)).toBe(AUTO_SPLIT_CHARS)
     expect(resolveSplitChunkSize(50_000, 4_000)).toBe(4_000)
+  })
+
+  it("uses a printable ASCII split header so files stay text-only", () => {
+    const wrapped = wrapSplitChunk(2, 5, "AwEAAA==")
+    expect(wrapped.startsWith(";TCP2;2;5;")).toBe(true)
+    expect(SPLIT_MAGIC).toBe(";TCP2;")
+    for (const char of wrapped) {
+      const code = char.charCodeAt(0)
+      expect(code).toBeGreaterThanOrEqual(32)
+      expect(code).toBeLessThan(127)
+    }
+  })
+
+  it("limits each split part file to -s characters including the header", () => {
+    const dir = makeTempDir()
+    const encoded = compress("x".repeat(500), 64)
+    const maxPartChars = 100
+    const wrappedParts = splitEncodedIntoWrappedParts(encoded, maxPartChars)
+    for (const part of wrappedParts) {
+      expect(part.length).toBeLessThanOrEqual(maxPartChars)
+    }
+
+    const totalParts = wrappedParts.length
+    for (let index = 0; index < totalParts; index++) {
+      const partPath = formatSplitOutputPath(join(dir, "out.txt"), index + 1, totalParts)
+      writeFileSync(partPath, wrappedParts[index], "utf-8")
+    }
+    expect(readSplitInput(join(dir, "out.1.txt")).content).toBe(encoded)
+    expect(decompress(readSplitInput(join(dir, "out.1.txt")).content, 64)).toBe("x".repeat(500))
+  })
+
+  it("accounts for wider headers when part counts cross digit boundaries", () => {
+    const encoded = "a".repeat(950)
+    const parts = splitEncodedIntoWrappedParts(encoded, 100)
+    expect(parts.length).toBeGreaterThan(1)
+    for (const part of parts) {
+      expect(part.length).toBeLessThanOrEqual(100)
+    }
+    const dir = makeTempDir()
+    const totalParts = parts.length
+    for (let index = 0; index < totalParts; index++) {
+      writeFileSync(
+        formatSplitOutputPath(join(dir, "wide.txt"), index + 1, totalParts),
+        parts[index],
+        "utf-8",
+      )
+    }
+    expect(readSplitInput(join(dir, "wide.1.txt")).content).toBe(encoded)
+  })
+
+  it("still reads legacy binary TCP\\x02 split headers", () => {
+    const dir = makeTempDir()
+    const legacyHeader = Buffer.alloc(12)
+    Buffer.from([0x54, 0x43, 0x50, 0x02]).copy(legacyHeader, 0)
+    legacyHeader.writeUInt32LE(1, 4)
+    legacyHeader.writeUInt32LE(1, 8)
+    const encoded = compress("legacy split header", 64)
+    writeFileSync(
+      join(dir, "legacy.txt"),
+      Buffer.concat([legacyHeader, Buffer.from(encoded, "utf-8")]),
+    )
+    expect(readSplitInput(join(dir, "legacy.txt")).content).toBe(encoded)
+    expect(decompress(readSplitInput(join(dir, "legacy.txt")).content, 64)).toBe(
+      "legacy split header",
+    )
   })
 })
 

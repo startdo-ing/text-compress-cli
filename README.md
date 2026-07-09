@@ -139,7 +139,7 @@ Password-protected payloads error without `-p` (they are **not** silently re-com
 
 ## v2 split output
 
-Large outputs split into numbered files (`output.1.txt`, `output.02.txt`, …). Each part embeds order in a `TCP\x02` header.
+Large outputs split into numbered files (`output.1.txt`, `output.02.txt`, …). Each part embeds order in a printable ASCII header (`;TCP2;<part>;<total>;`). The `-s` limit applies to the **entire part file** (header + payload), not just the encoded content.
 
 On decompress:
 
@@ -168,6 +168,11 @@ npm run build
 npm run check
 ```
 
+Git hooks (via [Husky](https://typicode.github.io/husky/)) run automatically after `bun install`:
+
+- **pre-commit** — `lint` + `typecheck`
+- **pre-push** — `check:ci` + `test`
+
 ### Publish
 
 ```bash
@@ -194,7 +199,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEA
 - New npm package **`text-compress`** (v1 remains `@startdoing/tc@1.0.4`)
 - Auto-detect compress vs decompress from input
 - Shorter CLI: `text-compress ./file.md` (no subcommand)
-- Self-describing split format (`TCP\x02` headers)
+- Self-describing split format (ASCII `;TCP2;` headers)
 - Prefix-based split discovery; skip invalid siblings
 - Force flags: `--compress` / `--decompress`
 

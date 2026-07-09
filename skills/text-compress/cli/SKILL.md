@@ -144,14 +144,14 @@ Source: src/cli/args.ts
 Wrong:
 
 ```bash
-# Expecting v1 raw concatenation without TCP\x02 headers
+# Expecting v1 raw concatenation without ;TCP2; headers
 text-compress ./v1-part.1.txt
 ```
 
 Correct:
 
 ```bash
-# v2 parts have TCP\x02 headers; pass any sibling
+# v2 parts have ;TCP2; ASCII headers; pass any sibling
 text-compress ./output.7.txt
 ```
 

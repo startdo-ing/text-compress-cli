@@ -26,8 +26,9 @@ Options:
   -C, --compress          Always compress (even if input looks compressed)
   -D, --decompress        Always decompress
   -o, --output <path>     Output path (optional, see defaults below)
-  -s, --split <chars>     Split compressed output into multiple files, each
-                           at most this many characters (compress only).
+  -s, --split <chars>     Split compressed output into multiple files. Each
+                           part file is at most this many characters total,
+                           including the ;TCP2; header (compress only).
                            If omitted, auto-splits at 30,000 characters when
                            the output is larger. Parts are named by inserting
                            .NNN before the extension, e.g. output.001.txt

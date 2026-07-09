@@ -153,7 +153,7 @@ When encoded output exceeds 30,000 characters (or a user `-s` limit), it is spli
 output.txt → output.1.txt, output.2.txt, …
 ```
 
-Each logical part is prefixed with a `TCP\x02` header carrying `partIndex` and `totalParts`, so reassembly does not depend on filename order. A physical file may contain multiple consecutive parts, and adjacent part files can be merged into fewer files before decompress.
+Each logical part is prefixed with a `;TCP2;<part>;<total>;` ASCII header carrying `partIndex` and `totalParts`, so reassembly does not depend on filename order. A physical file may contain multiple consecutive parts, and adjacent part files can be merged into fewer files before decompress. Legacy v2.0.x binary `TCP\x02` headers are still accepted on read.
 
 On decompress, pass any sibling file. All files whose basename starts with the same prefix (segment before the first `.`) are scanned; extension is ignored and invalid siblings are skipped.
 

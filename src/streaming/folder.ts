@@ -47,15 +47,10 @@ import { writeDirEntry, writeFileEntry } from "../archive/format.js"
 import { createMaxQualityBrotliCompress } from "../compression/brotli.js"
 import { encryptBuffer } from "../crypto/password.js"
 import { encodeBase64 } from "../encoding/base64.js"
-import { estimatedEncodedLength } from "../encoding/index.js"
 import { encodeBase85 } from "../encoding/z85.js"
 import { walkDirectory } from "../fs/walk.js"
 import { TAG_FOLDER } from "../payload/tags.js"
-import {
-  createSplitChunkHeader,
-  formatSplitOutputPath,
-  resolveSplitChunkSize,
-} from "../split/parts.js"
+import { writeEncodedOutput } from "../split/parts.js"
 import type { Encoding } from "../types.js"
 
 /** Buffer size when copying file content into the archive. */
@@ -136,25 +131,14 @@ async function brotliCompressFile(inputPath: string, outputPath: string): Promis
   )
 }
 
-/** Open one numbered part file for split output. */
-function openPart(outputPath: string, partIndex: number, totalParts: number) {
-  const path = formatSplitOutputPath(outputPath, partIndex, totalParts)
-  const fd = openSync(path, "w")
-  writeSync(fd, createSplitChunkHeader(partIndex, totalParts))
-  return { path, fd }
-}
-
 /**
- * Stream-read a binary file and write encoded text to one or more output files.
- *
- * Handles optional character-based splitting across part files.
+ * Stream-read a binary file and write encoded text to a single output file.
  */
-function encodeBinaryFileToTextFiles(
+function encodeBinaryFileToTextFile(
   inputPath: string,
   outputPath: string,
   encoding: Encoding,
-  split?: number,
-): string[] {
+): void {
   const binaryBytes = statSync(inputPath).size
   const srcFd = openSync(inputPath, "r")
 
@@ -181,60 +165,13 @@ function encodeBinaryFileToTextFiles(
     }
   }
 
-  if (!split) {
-    const outFd = openSync(outputPath, "w")
-    try {
-      readAndEncode((text) => writeSync(outFd, text))
-    } finally {
-      closeSync(srcFd)
-      closeSync(outFd)
-    }
-    return [outputPath]
-  }
-
-  const encodedLength = estimatedEncodedLength(binaryBytes, encoding)
-  const totalParts = Math.ceil(encodedLength / split)
-  const paths: string[] = []
-
-  let partIndex = 1
-  let part = openPart(outputPath, partIndex, totalParts)
-  paths.push(part.path)
-  let partChars = 0
-
-  const flushPart = () => {
-    closeSync(part.fd)
-    if (partIndex < totalParts) {
-      partIndex++
-      part = openPart(outputPath, partIndex, totalParts)
-      paths.push(part.path)
-      partChars = 0
-    }
-  }
-
-  const writeEncoded = (text: string) => {
-    let offset = 0
-    while (offset < text.length) {
-      const remaining = split - partChars
-      if (remaining <= 0) {
-        flushPart()
-        continue
-      }
-      const slice = text.slice(offset, offset + remaining)
-      writeSync(part.fd, slice)
-      partChars += slice.length
-      offset += slice.length
-      if (partChars >= split && offset < text.length) flushPart()
-    }
-  }
-
+  const outFd = openSync(outputPath, "w")
   try {
-    readAndEncode(writeEncoded)
+    readAndEncode((text) => writeSync(outFd, text))
   } finally {
     closeSync(srcFd)
-    closeSync(part.fd)
+    closeSync(outFd)
   }
-
-  return paths
 }
 
 /** Result of {@link compressFolderToPath}. */
@@ -270,14 +207,10 @@ export async function compressFolderToPath(
       encodeInputPath = encryptedPath
     }
     const compressedBytes = statSync(encodeInputPath).size
-    const encodedLength = estimatedEncodedLength(compressedBytes, encoding)
-    const splitChunkSize = resolveSplitChunkSize(encodedLength, split)
-    const outputPaths = encodeBinaryFileToTextFiles(
-      encodeInputPath,
-      outputPath,
-      encoding,
-      splitChunkSize,
-    )
+    const encodedPath = join(tempDir, "encoded.txt")
+    encodeBinaryFileToTextFile(encodeInputPath, encodedPath, encoding)
+    const encoded = readFileSync(encodedPath, "utf-8")
+    const { paths: outputPaths, splitChunkSize } = writeEncodedOutput(encoded, outputPath, split)
     return { ...stats, compressedBytes, outputPaths, splitChunkSize }
   } finally {
     rmSync(tempDir, { recursive: true, force: true })

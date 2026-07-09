@@ -9,12 +9,16 @@
  *
  * ## v2 split format
  *
- * Each logical part is prefixed with a 12-byte header so order is encoded in
- * file content, not filenames:
+ * Each logical part is prefixed with a short ASCII header so order is encoded
+ * in file content, not filenames. The header uses only printable text (no NUL
+ * or control bytes) so split files stay pasteable and open in any text editor:
  *
  * ```
- *   [magic: "TCP\x02"][partIndex: u32le][totalParts: u32le][payload…]
+ *   ;TCP2;<partIndex>;<totalParts>;<payload…>
  * ```
+ *
+ * Legacy v2.0.x files used a 12-byte binary header (`TCP\x02` + u32le fields);
+ * those are still accepted on read.
  *
  * Every part carries `totalParts`, so any single valid part reveals how many
  * logical parts exist. A physical file may contain one or more consecutive
@@ -41,19 +45,23 @@
  * ## Auto-split threshold
  *
  * When no explicit `-s` size is given, outputs longer than
- * {@link AUTO_SPLIT_CHARS} are automatically split.
+ * {@link AUTO_SPLIT_CHARS} are automatically split. Split limits count the
+ * entire part file, including the `;TCP2;` header — not just the payload.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 
 /** Default character threshold for automatic output splitting. */
 export const AUTO_SPLIT_CHARS = 30_000
 
-/** Magic bytes identifying a v2 split chunk header. */
-export const SPLIT_MAGIC = Buffer.from([0x54, 0x43, 0x50, 0x02])
+/** ASCII prefix identifying a v2 split chunk header. */
+export const SPLIT_MAGIC = ";TCP2;"
 
-const SPLIT_HEADER_SIZE = 12
+/** Legacy binary magic from v2.0.x (still accepted on read). */
+const LEGACY_SPLIT_MAGIC = Buffer.from([0x54, 0x43, 0x50, 0x02])
+
+const LEGACY_SPLIT_HEADER_SIZE = 12
 
 /** One parsed logical part from split file content. */
 export interface SplitChunk {
@@ -67,7 +75,7 @@ export interface SplitChunk {
  *
  * @param encodedLength - Total characters in the encoded string.
  * @param explicitSplit - User-provided `-s` value, if any.
- * @returns Chunk size, or `undefined` when no split is needed.
+ * @returns Max characters per part file (header + payload), or `undefined` when no split is needed.
  */
 export function resolveSplitChunkSize(
   encodedLength: number,
@@ -76,6 +84,112 @@ export function resolveSplitChunkSize(
   if (explicitSplit !== undefined) return explicitSplit
   if (encodedLength > AUTO_SPLIT_CHARS) return AUTO_SPLIT_CHARS
   return undefined
+}
+
+/** Character length of the split header for one part. */
+export function splitHeaderLength(partIndex: number, totalParts: number): number {
+  return createSplitChunkHeader(partIndex, totalParts).length
+}
+
+/** Smallest allowed `-s` value (header-only part for a single-part output). */
+export function minSplitPartChars(): number {
+  return splitHeaderLength(1, 1)
+}
+
+function assertSplitPartChars(maxPartChars: number): void {
+  const min = minSplitPartChars()
+  if (!Number.isInteger(maxPartChars) || maxPartChars < min) {
+    throw new Error(`Split size must be at least ${min} characters (to fit split headers).`)
+  }
+}
+
+function countSplitParts(
+  encodedLength: number,
+  maxPartChars: number,
+  totalPartsGuess: number,
+): number {
+  if (encodedLength === 0) return 1
+
+  let offset = 0
+  let partIndex = 0
+  while (offset < encodedLength) {
+    partIndex++
+    const payloadCap = maxPartChars - splitHeaderLength(partIndex, totalPartsGuess)
+    if (payloadCap < 1) {
+      throw new Error(
+        `Split size ${maxPartChars} is too small for ${totalPartsGuess} parts (header alone is ${splitHeaderLength(partIndex, totalPartsGuess)} characters).`,
+      )
+    }
+    offset += Math.min(payloadCap, encodedLength - offset)
+  }
+  return partIndex
+}
+
+/**
+ * Resolve how many part files are needed when each file is at most `maxPartChars`.
+ *
+ * Iterates until the guessed `totalParts` matches the count implied by header sizes.
+ */
+export function resolveSplitPartCount(encodedLength: number, maxPartChars: number): number {
+  assertSplitPartChars(maxPartChars)
+  if (encodedLength === 0) return 1
+
+  let totalParts = 1
+  for (let i = 0; i < 20; i++) {
+    const next = countSplitParts(encodedLength, maxPartChars, totalParts)
+    if (next === totalParts) return totalParts
+    totalParts = next
+  }
+  return totalParts
+}
+
+/**
+ * Split encoded text into wrapped part strings, each at most `maxPartChars` long.
+ */
+export function splitEncodedIntoWrappedParts(encoded: string, maxPartChars: number): string[] {
+  assertSplitPartChars(maxPartChars)
+  const totalParts = resolveSplitPartCount(encoded.length, maxPartChars)
+  const parts: string[] = []
+  let offset = 0
+
+  for (let partIndex = 1; partIndex <= totalParts; partIndex++) {
+    const payloadCap = maxPartChars - splitHeaderLength(partIndex, totalParts)
+    const payload = encoded.slice(offset, offset + payloadCap)
+    const wrapped = wrapSplitChunk(partIndex, totalParts, payload)
+    if (wrapped.length > maxPartChars) {
+      throw new Error(
+        `Split part ${partIndex} is ${wrapped.length} characters, exceeding limit ${maxPartChars}.`,
+      )
+    }
+    parts.push(wrapped)
+    offset += payload.length
+  }
+
+  return parts
+}
+
+/**
+ * Write encoded text to one file or numbered split part files.
+ */
+export function writeEncodedOutput(
+  encoded: string,
+  outputPath: string,
+  explicitSplit?: number,
+): { paths: string[]; splitChunkSize?: number } {
+  const maxPartChars = resolveSplitChunkSize(encoded.length, explicitSplit)
+  if (maxPartChars === undefined) {
+    writeFileSync(outputPath, encoded, "utf-8")
+    return { paths: [outputPath] }
+  }
+
+  const wrappedParts = splitEncodedIntoWrappedParts(encoded, maxPartChars)
+  const totalParts = wrappedParts.length
+  const paths = wrappedParts.map((content, index) => {
+    const partPath = formatSplitOutputPath(outputPath, index + 1, totalParts)
+    writeFileSync(partPath, content, "utf-8")
+    return partPath
+  })
+  return { paths, splitChunkSize: maxPartChars }
 }
 
 /**
@@ -96,42 +210,86 @@ export function splitString(value: string, chunkSize: number): string[] {
   return chunks
 }
 
-/** Build the 12-byte v2 split chunk header. */
-export function createSplitChunkHeader(partIndex: number, totalParts: number): Buffer {
-  const header = Buffer.alloc(SPLIT_HEADER_SIZE)
-  SPLIT_MAGIC.copy(header, 0)
-  header.writeUInt32LE(partIndex, 4)
-  header.writeUInt32LE(totalParts, 8)
-  return header
+/** Build the ASCII v2 split chunk header. */
+export function createSplitChunkHeader(partIndex: number, totalParts: number): string {
+  return `${SPLIT_MAGIC}${partIndex};${totalParts};`
 }
 
 /**
  * Wrap one encoded payload chunk with a v2 split header.
  */
 export function wrapSplitChunk(partIndex: number, totalParts: number, payload: string): string {
-  return Buffer.concat([
-    createSplitChunkHeader(partIndex, totalParts),
-    Buffer.from(payload, "utf-8"),
-  ]).toString("utf-8")
+  return `${createSplitChunkHeader(partIndex, totalParts)}${payload}`
 }
 
-function readSplitChunks(buf: Buffer): SplitChunk[] {
+function parseTextSplitHeader(
+  text: string,
+  offset: number,
+): { partIndex: number; totalParts: number; headerEnd: number } | null {
+  if (!text.startsWith(SPLIT_MAGIC, offset)) return null
+
+  let pos = offset + SPLIT_MAGIC.length
+  const partEnd = text.indexOf(";", pos)
+  if (partEnd === -1) return null
+
+  const partIndex = Number(text.slice(pos, partEnd))
+  pos = partEnd + 1
+  const totalEnd = text.indexOf(";", pos)
+  if (totalEnd === -1) return null
+
+  const totalParts = Number(text.slice(pos, totalEnd))
+  if (
+    !Number.isInteger(partIndex) ||
+    !Number.isInteger(totalParts) ||
+    partIndex < 1 ||
+    totalParts < 1
+  ) {
+    return null
+  }
+
+  return { partIndex, totalParts, headerEnd: totalEnd + 1 }
+}
+
+function readTextSplitChunks(text: string): SplitChunk[] {
+  const chunks: SplitChunk[] = []
+  let offset = 0
+
+  while (offset < text.length) {
+    const header = parseTextSplitHeader(text, offset)
+    if (!header) {
+      throw new Error("Invalid split format: unexpected data between split chunks.")
+    }
+
+    const nextMagic = text.indexOf(SPLIT_MAGIC, header.headerEnd)
+    const end = nextMagic === -1 ? text.length : nextMagic
+    chunks.push({
+      partIndex: header.partIndex,
+      totalParts: header.totalParts,
+      payload: text.slice(header.headerEnd, end),
+    })
+    offset = end
+  }
+
+  return chunks
+}
+
+function readLegacyBinarySplitChunks(buf: Buffer): SplitChunk[] {
   const chunks: SplitChunk[] = []
   let offset = 0
 
   while (offset < buf.length) {
-    if (buf.length - offset < SPLIT_HEADER_SIZE) {
+    if (buf.length - offset < LEGACY_SPLIT_HEADER_SIZE) {
       throw new Error("Invalid split format: truncated chunk header.")
     }
-    if (!buf.subarray(offset, offset + SPLIT_MAGIC.length).equals(SPLIT_MAGIC)) {
+    if (!buf.subarray(offset, offset + LEGACY_SPLIT_MAGIC.length).equals(LEGACY_SPLIT_MAGIC)) {
       throw new Error("Invalid split format: unexpected data between split chunks.")
     }
 
     const partIndex = buf.readUInt32LE(offset + 4)
     const totalParts = buf.readUInt32LE(offset + 8)
-    offset += SPLIT_HEADER_SIZE
+    offset += LEGACY_SPLIT_HEADER_SIZE
 
-    const nextMagic = buf.indexOf(SPLIT_MAGIC, offset)
+    const nextMagic = buf.indexOf(LEGACY_SPLIT_MAGIC, offset)
     const end = nextMagic === -1 ? buf.length : nextMagic
     const payload = buf.subarray(offset, end).toString("utf-8")
     chunks.push({ partIndex, totalParts, payload })
@@ -141,14 +299,26 @@ function readSplitChunks(buf: Buffer): SplitChunk[] {
   return chunks
 }
 
+function readSplitChunks(buf: Buffer): SplitChunk[] {
+  if (buf.subarray(0, SPLIT_MAGIC.length).toString("utf-8") === SPLIT_MAGIC) {
+    return readTextSplitChunks(buf.toString("utf-8"))
+  }
+  if (buf.subarray(0, LEGACY_SPLIT_MAGIC.length).equals(LEGACY_SPLIT_MAGIC)) {
+    return readLegacyBinarySplitChunks(buf)
+  }
+  throw new Error("Invalid split format: missing chunk header.")
+}
+
 /**
  * Parse split chunks from a buffer when it starts with a split header.
  *
  * @returns `null` when the buffer is not split data or is malformed.
  */
 export function tryParseSplitChunks(buf: Buffer): SplitChunk[] | null {
-  if (buf.length < SPLIT_HEADER_SIZE) return null
-  if (!buf.subarray(0, SPLIT_MAGIC.length).equals(SPLIT_MAGIC)) return null
+  if (buf.length < SPLIT_MAGIC.length) return null
+  const startsWithText = buf.subarray(0, SPLIT_MAGIC.length).toString("utf-8") === SPLIT_MAGIC
+  const startsWithLegacy = buf.subarray(0, LEGACY_SPLIT_MAGIC.length).equals(LEGACY_SPLIT_MAGIC)
+  if (!startsWithText && !startsWithLegacy) return null
   try {
     return readSplitChunks(buf)
   } catch {

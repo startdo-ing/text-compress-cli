@@ -3,7 +3,6 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { parseSplitBuffer } from "../src/index.js"
 
 const cli = join(import.meta.dirname, "../dist/cli.js")
 const tempDirs: string[] = []
@@ -96,8 +95,8 @@ describe("text-compress cli", () => {
 
     runCli([input, "-o", join(dir, "large-out.txt")])
 
-    const part1 = parseSplitBuffer(readFileSync(join(dir, "large-out.1.txt")))
-    expect(part1[0].payload.length).toBeLessThanOrEqual(30_000)
+    const part1 = readFileSync(join(dir, "large-out.1.txt"), "utf-8")
+    expect(part1.length).toBeLessThanOrEqual(30_000)
     expect(readFileSync(join(dir, "large-out.2.txt"), "utf-8").length).toBeGreaterThan(0)
     runCli([join(dir, "large-out.1.txt"), "-o", join(dir, "large-restored.txt")])
     expect(readFileSync(join(dir, "large-restored.txt"), "utf-8")).toBe(payload)
