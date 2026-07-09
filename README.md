@@ -168,6 +168,13 @@ npm run build
 npm run check
 ```
 
+### Publish
+
+```bash
+npm login
+npm publish --access public
+```
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEARNING.md).
 
 ## Changelog
