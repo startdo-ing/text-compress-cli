@@ -5,6 +5,7 @@
  */
 
 import { readSplitInput } from "../split/parts.js"
+import { printVersion } from "./analytics.js"
 import { type Args, parseArgs, resolveEncodingOptional, resolveInputArgs } from "./args.js"
 import { runCompress } from "./commands/compress.js"
 import { runDecompress } from "./commands/decompress.js"
@@ -13,6 +14,10 @@ import { printUsage } from "./usage.js"
 
 function wantsHelp(argv: string[]): boolean {
   return argv.length === 0 || argv.includes("-h") || argv.includes("--help")
+}
+
+function wantsVersion(argv: string[]): boolean {
+  return argv.includes("-V") || argv.includes("--version")
 }
 
 /** Strip an optional legacy leading compress/decompress command. */
@@ -50,6 +55,11 @@ export function main() {
   if (wantsHelp(argv)) {
     printUsage()
     process.exit(argv.length === 0 ? 1 : 0)
+  }
+
+  if (wantsVersion(argv)) {
+    printVersion()
+    process.exit(0)
   }
 
   const legacy = normalizeArgv(argv)

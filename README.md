@@ -67,6 +67,9 @@ text-compress ./large-file.txt -s 4000
 # Inline text
 text-compress -t "hello world" -o output.txt
 
+# Show version
+text-compress --version
+
 # Force mode when auto-detect is wrong
 text-compress --compress ./looks-compressed.txt
 text-compress --decompress ./plain.md   # errors if not valid payload
@@ -183,6 +186,12 @@ npm publish --access public
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEARNING.md).
 
 ## Changelog
+
+### v2.0.4 — `text-compress` (2026-07-09)
+
+- Show package version on every run (`text-compress v2.0.4`)
+- Add `-V` / `--version` flag
+- Improve CLI summary: aligned stats, human-readable sizes, clearer split output
 
 ### v2.0.3 — `text-compress` (2026-07-09)
 

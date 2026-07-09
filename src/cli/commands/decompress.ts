@@ -8,7 +8,7 @@ import { writeFileSync } from "node:fs"
 import { unpackDirectory } from "../../archive/unpack.js"
 import { decompressPayload, TAG_FOLDER, TAG_TEXT } from "../../payload/tags.js"
 import { readSplitInput } from "../../split/parts.js"
-import { printAnalytics } from "../analytics.js"
+import { formatBytes, formatCount, printRunSummary } from "../analytics.js"
 import { type Args, readInput, resolveEncoding, resolveEncodingOptional } from "../args.js"
 import { resolveDetectedEncoding } from "../detect.js"
 import { resolveOutputPath } from "../paths.js"
@@ -47,15 +47,18 @@ export function runDecompress(args: Args): void {
     const outputPath = resolveOutputPath(args, "decompressed.de", ".de")
     const { files, dirs, bytes } = unpackDirectory(data, outputPath)
 
-    console.log(`Decompressed folder recreated at ${outputPath}`)
-    printAnalytics({
-      Encoding: `base${encoding}`,
-      [`Compressed size (bytes, base${encoding})`]: inputBytes,
-      ...(partPaths ? { "Input parts": partPaths.length } : {}),
-      "Files restored": files,
-      "Directories restored": dirs,
-      "Decompressed size (bytes)": bytes,
-      "Time taken (ms)": elapsedMs.toFixed(3),
+    printRunSummary({
+      title: "Decompressed folder",
+      outputPaths: [outputPath],
+      stats: {
+        Encoding: `base${encoding}`,
+        [`Compressed (base${encoding})`]: formatBytes(inputBytes),
+        ...(partPaths ? { "Input parts": partPaths.length } : {}),
+        "Files restored": formatCount(files),
+        "Directories restored": formatCount(dirs),
+        "Restored size": formatBytes(bytes),
+        Time: `${elapsedMs.toFixed(0)} ms`,
+      },
     })
     return
   }
@@ -70,13 +73,16 @@ export function runDecompress(args: Args): void {
   const outputBytes = Buffer.byteLength(result, "utf-8")
   const ratio = inputBytes === 0 ? 0 : outputBytes / inputBytes
 
-  console.log(`Decompressed output written to ${outputPath}`)
-  printAnalytics({
-    Encoding: `base${encoding}`,
-    [`Compressed size (bytes, base${encoding})`]: inputBytes,
-    ...(partPaths ? { "Input parts": partPaths.length } : {}),
-    "Decompressed size (bytes)": outputBytes,
-    "Expansion ratio (decompressed/compressed)": ratio.toFixed(3),
-    "Time taken (ms)": elapsedMs.toFixed(3),
+  printRunSummary({
+    title: "Decompressed text",
+    outputPaths: [outputPath],
+    stats: {
+      Encoding: `base${encoding}`,
+      [`Compressed (base${encoding})`]: formatBytes(inputBytes),
+      ...(partPaths ? { "Input parts": partPaths.length } : {}),
+      "Restored size": formatBytes(outputBytes),
+      "Expansion ratio": ratio.toFixed(3),
+      Time: `${elapsedMs.toFixed(0)} ms`,
+    },
   })
 }

@@ -40,6 +40,7 @@ Options:
                                  preserves text verbatim (e.g. a code block)
   -p, --password <string>  Password-protect on compress, or unlock on decompress
   -h, --help               Show this usage guide
+  -V, --version            Show package version
 
 Split output (decompress):
   Pass any one sibling file. All files sharing the same basename prefix
