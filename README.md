@@ -64,6 +64,10 @@ text-compress ./notes.md -e 85
 # Split large output
 text-compress ./large-file.txt -s 4000
 
+# Keep a single file (disable auto-split)
+text-compress ./large-file.txt --no-split
+text-compress ./large-file.txt -s 0
+
 # Inline text
 text-compress -t "hello world" -o output.txt
 
@@ -142,7 +146,7 @@ Password-protected payloads error without `-p` (they are **not** silently re-com
 
 ## v2 split output
 
-Large outputs split into numbered files (`output.1.txt`, `output.02.txt`, …). Each part embeds order in a printable ASCII header (`;TCP2;<part>;<total>;`). The `-s` limit applies to the **entire part file** (header + payload), not just the encoded content.
+Large outputs split into numbered files (`output.1.txt`, `output.02.txt`, …). Each part embeds order in a printable ASCII header (`;TCP2;<part>;<total>;`). The `-s` limit applies to the **entire part file** (header + payload), not just the encoded content. Omit `-s` to auto-split above 30,000 characters; use `--no-split` or `-s 0` to keep a single file.
 
 On decompress:
 
@@ -186,6 +190,10 @@ npm publish --access public
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEARNING.md).
 
 ## Changelog
+
+### v2.0.6 — `text-compress` (2026-07-13)
+
+- Add `--no-split` and `-s 0` to disable auto-split and write a single compressed file
 
 ### v2.0.4 — `text-compress` (2026-07-09)
 

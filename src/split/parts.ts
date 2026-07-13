@@ -75,12 +75,15 @@ export interface SplitChunk {
  *
  * @param encodedLength - Total characters in the encoded string.
  * @param explicitSplit - User-provided `-s` value, if any.
+ *   Pass `0` (CLI: `-s 0` or `--no-split`) to disable splitting entirely,
+ *   including the 30,000-character auto-split.
  * @returns Max characters per part file (header + payload), or `undefined` when no split is needed.
  */
 export function resolveSplitChunkSize(
   encodedLength: number,
   explicitSplit?: number,
 ): number | undefined {
+  if (explicitSplit === 0) return undefined
   if (explicitSplit !== undefined) return explicitSplit
   if (encodedLength > AUTO_SPLIT_CHARS) return AUTO_SPLIT_CHARS
   return undefined

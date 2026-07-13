@@ -1,6 +1,6 @@
 {
   "name": "text-compress",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "Brotli-compress text or folders to base64/base85 strings for easy sharing",
   "type": "module",
   "main": "./dist/index.js",

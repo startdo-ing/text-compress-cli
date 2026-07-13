@@ -20,6 +20,7 @@ export interface Args {
   dir?: string
   output?: string
   encoding?: string
+  /** Max chars per part, or `0` to disable splitting (`--no-split` / `-s 0`). */
   split?: number
   password?: string
   /** Force compress or decompress instead of auto-detecting from input. */
@@ -57,10 +58,14 @@ export function parseArgs(argv: string[]): Args {
     } else if (arg === "-s" || arg === "--split") {
       const value = argv[++i]
       const split = Number(value)
-      if (!value || !Number.isInteger(split) || split < 1) {
-        throw new Error(`Invalid -s/--split "${value}". Use a positive integer character count.`)
+      if (!value || !Number.isInteger(split) || split < 0) {
+        throw new Error(
+          `Invalid -s/--split "${value}". Use 0 to disable splitting, or a positive integer character count.`,
+        )
       }
       args.split = split
+    } else if (arg === "--no-split") {
+      args.split = 0
     } else if (arg === "-p" || arg === "--password") {
       const value = argv[++i]
       if (!value) {

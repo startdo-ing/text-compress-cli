@@ -333,6 +333,11 @@ describe("split output", () => {
     expect(resolveSplitChunkSize(50_000, 4_000)).toBe(4_000)
   })
 
+  it("disables splitting when explicit size is 0", () => {
+    expect(resolveSplitChunkSize(50_000, 0)).toBeUndefined()
+    expect(resolveSplitChunkSize(30_001, 0)).toBeUndefined()
+  })
+
   it("uses a printable ASCII split header so files stay text-only", () => {
     const wrapped = wrapSplitChunk(2, 5, "AwEAAA==")
     expect(wrapped.startsWith(";TCP2;2;5;")).toBe(true)

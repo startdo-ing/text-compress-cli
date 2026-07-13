@@ -29,9 +29,11 @@ Options:
   -s, --split <chars>     Split compressed output into multiple files. Each
                            part file is at most this many characters total,
                            including the ;TCP2; header (compress only).
+                           Use 0 to write a single file (no split).
                            If omitted, auto-splits at 30,000 characters when
                            the output is larger. Parts are named by inserting
                            .NNN before the extension, e.g. output.001.txt
+  --no-split              Same as -s 0: never split compressed output
   -e, --encoding <64|85>  Text encoding for the compressed output (default: 64)
                              64: standard base64 [A-Za-z0-9+/=] — safe to
                                  paste literally anywhere (chat, email, etc.)
@@ -60,6 +62,7 @@ Examples:
   text-compress ./my-project
   text-compress notes.md -e 85
   text-compress notes.md -s 4000
+  text-compress notes.md --no-split
   text-compress output.txt
   text-compress output.txt -p "my secret"
   text-compress output.01.txt

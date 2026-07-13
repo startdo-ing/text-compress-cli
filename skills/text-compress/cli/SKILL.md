@@ -2,7 +2,7 @@
 name: cli
 description: >
   text-compress CLI: auto-detect compress vs decompress from input path or -t
-  text, -e 64/85 encoding, -p password, -s split parts, -o output, --compress
+  text, -e 64/85 encoding, -p password, -s split parts (or --no-split / -s 0), -o output, --compress
   and --decompress force flags. No compress/decompress subcommands in v2.
 metadata:
   type: sub-skill
@@ -60,6 +60,7 @@ text-compress ./locked.txt -p "my secret" -o notes.md
 ```bash
 text-compress ./notes.md -e 85
 text-compress ./large-file.txt -s 4000
+text-compress ./large-file.txt --no-split   # or -s 0
 text-compress ./output.7.txt      # decompress any split sibling
 ```
 

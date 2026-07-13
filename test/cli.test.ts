@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
@@ -100,6 +100,27 @@ describe("text-compress cli", () => {
     expect(readFileSync(join(dir, "large-out.2.txt"), "utf-8").length).toBeGreaterThan(0)
     runCli([join(dir, "large-out.1.txt"), "-o", join(dir, "large-restored.txt")])
     expect(readFileSync(join(dir, "large-restored.txt"), "utf-8")).toBe(payload)
+  })
+
+  it("writes a single file when --no-split or -s 0 is set", () => {
+    const dir = makeTempDir()
+    const input = join(dir, "large.txt")
+    const payload = Array.from({ length: 8_000 }, (_, i) => `line ${i} varied ${i * i}\n`).join("")
+    writeFileSync(input, payload)
+
+    const noSplitOut = join(dir, "no-split-out.txt")
+    runCli([input, "-o", noSplitOut, "--no-split"])
+    expect(existsSync(noSplitOut)).toBe(true)
+    expect(existsSync(join(dir, "no-split-out.1.txt"))).toBe(false)
+    expect(readFileSync(noSplitOut, "utf-8").length).toBeGreaterThan(30_000)
+
+    const zeroOut = join(dir, "zero-split-out.txt")
+    runCli([input, "-o", zeroOut, "-s", "0"])
+    expect(existsSync(zeroOut)).toBe(true)
+    expect(existsSync(join(dir, "zero-split-out.1.txt"))).toBe(false)
+
+    runCli([noSplitOut, "-o", join(dir, "restored.txt")])
+    expect(readFileSync(join(dir, "restored.txt"), "utf-8")).toBe(payload)
   })
 
   it("round-trips text with a password", () => {
