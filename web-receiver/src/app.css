@@ -1,0 +1,63 @@
+:root {
+  --void: oklch(0.13 0.028 258);
+  --void-deep: oklch(0.09 0.02 258);
+  --glass: oklch(0.18 0.03 250 / 0.78);
+  --filament: oklch(0.84 0.12 78);
+  --filament-dim: oklch(0.72 0.1 78 / 0.55);
+  --scan: oklch(0.74 0.11 212);
+  --scan-dim: oklch(0.55 0.08 212 / 0.35);
+  --paper: oklch(0.96 0.012 92);
+  --ink: oklch(0.93 0.02 95);
+  --muted: oklch(0.78 0.03 250);
+  --danger: oklch(0.72 0.16 28);
+  --ok: oklch(0.78 0.12 150);
+  --sans: "Sora", "Segoe UI", sans-serif;
+  --mono: "Spline Sans Mono", ui-monospace, monospace;
+  --pad: max(1.25rem, env(safe-area-inset-bottom));
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+  height: 100%;
+}
+
+html {
+  background: var(--void-deep);
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  background: var(--void);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--filament);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

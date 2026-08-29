@@ -1,6 +1,6 @@
 {
   "name": "text-compress",
-  "version": "2.0.6",
+  "version": "2.1.0",
   "description": "Brotli-compress text or folders to base64/base85 strings for easy sharing",
   "type": "module",
   "main": "./dist/index.js",
@@ -29,6 +29,7 @@
     "test": "vitest run",
     "pretest": "npm run build",
     "test:watch": "vitest",
+    "receiver": "npm run dev --prefix web-receiver -- --host",
     "prepublishOnly": "npm run build",
     "validate:skills": "intent validate",
     "prepare": "husky"
@@ -59,12 +60,14 @@
     "@biomejs/biome": "^2.5.3",
     "@tanstack/intent": "^0.3.5",
     "@types/node": "^26.1.1",
+    "@types/qrcode": "^1.5.6",
     "husky": "^9.1.7",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "ignore": "^7.0.5"
+    "ignore": "^7.0.5",
+    "qrcode": "^1.5.4"
   }
 }

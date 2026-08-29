@@ -8,7 +8,7 @@ description: >
 metadata:
   type: core
   library: text-compress
-  library_version: '2.0.2'
+  library_version: '2.1.0'
 sources:
   - startdo-ing/text-compress-cli:README.md
   - startdo-ing/text-compress-cli:docs/ARCHITECTURE.md
@@ -42,6 +42,7 @@ be split into numbered part files for chat paste limits.
 
 ## Quick Decision Tree
 
+- Air-gap a payload to a phone? → text-compress send + web-receiver
 - Terminal one-liner, auto-detect mode? → text-compress/cli
 - Programmatic use in Node/TS? → text-compress/library
 - Password-protected payload? → pass `-p` / `password` on both compress and decompress
@@ -60,4 +61,4 @@ decompress, the CLI tries both.
 
 ## Version
 
-Targets `text-compress` v2.0.2.
+Targets `text-compress` v2.1.0.

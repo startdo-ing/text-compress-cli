@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { SessionAssembler } from "../src/qr/protocol.js"
 
 const cli = join(import.meta.dirname, "../dist/cli.js")
 const tempDirs: string[] = []
@@ -189,5 +190,24 @@ describe("text-compress cli", () => {
     expect(readFileSync(double, "utf-8").length).toBeGreaterThan(
       readFileSync(compressed, "utf-8").length,
     )
+  })
+
+  it("dumps QR frames that reassemble to the compressed payload", async () => {
+    const dir = makeTempDir()
+    const input = join(dir, "notes.md")
+    writeFileSync(input, "send me through light")
+
+    const compressed = join(dir, "notes.txt")
+    runCli([input, "-o", compressed, "--no-split"])
+    const expected = readFileSync(compressed, "utf-8")
+
+    const dump = runCli(["send", input, "--dump", "--chunk-size", "40"])
+    const frames = dump.split("\n").filter((line) => line.startsWith("TCQR1"))
+    expect(frames[0]?.startsWith("TCQR1h|")).toBe(true)
+    expect(frames.length).toBeGreaterThan(1)
+
+    const assembler = new SessionAssembler()
+    for (const frame of frames) assembler.addText(frame)
+    await expect(assembler.assemble()).resolves.toBe(expected)
   })
 })

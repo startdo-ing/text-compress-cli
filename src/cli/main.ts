@@ -9,6 +9,7 @@ import { printVersion } from "./analytics.js"
 import { type Args, parseArgs, resolveEncodingOptional, resolveInputArgs } from "./args.js"
 import { runCompress } from "./commands/compress.js"
 import { runDecompress } from "./commands/decompress.js"
+import { runSend } from "./commands/send.js"
 import { detectCompressedPayload } from "./detect.js"
 import { printUsage } from "./usage.js"
 
@@ -20,11 +21,12 @@ function wantsVersion(argv: string[]): boolean {
   return argv.includes("-V") || argv.includes("--version")
 }
 
-/** Strip an optional legacy leading compress/decompress command. */
+/** Strip an optional leading compress/decompress/send command. */
 function normalizeArgv(argv: string[]): { argv: string[]; forcedMode?: Args["mode"] } {
   const [first, ...rest] = argv
   if (first === "compress" || first === "c") return { argv: rest, forcedMode: "compress" }
   if (first === "decompress" || first === "d") return { argv: rest, forcedMode: "decompress" }
+  if (first === "send") return { argv: rest, forcedMode: "send" }
   return { argv }
 }
 
@@ -34,7 +36,8 @@ function readEncodedInput(args: Args): string {
   throw new Error("No input provided. Pass a path, or use -t <text>.")
 }
 
-function resolveCliMode(args: Args): "compress" | "decompress" {
+function resolveCliMode(args: Args): "compress" | "decompress" | "send" {
+  if (args.mode === "send") return "send"
   if (args.mode === "compress") return "compress"
   if (args.mode === "decompress") return "decompress"
   if (args.dir) return "compress"
@@ -73,6 +76,11 @@ export function main() {
     resolveInputArgs(args, args.mode === "decompress" ? "decompress" : "compress")
 
     const mode = resolveCliMode(args)
+
+    if (mode === "send") {
+      await runSend(args)
+      return
+    }
 
     if (mode === "decompress") {
       runDecompress(args)

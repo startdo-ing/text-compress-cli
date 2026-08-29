@@ -13,6 +13,7 @@ Brotli-compress text or entire folder trees into pasteable base64 or Z85 strings
 - **Folder archives** — pack a directory tree into one string
 - **Password protection** — AES-256-GCM (`-p` / `--password`)
 - **v2 split parts** — self-describing parts; shuffled names, merged files, any sibling as entry
+- **QR send** — stream a payload as looping terminal QR codes; receive with the camera web app
 - **CLI + library** — terminal or `import from "text-compress"`
 - **Agent skills** — versioned [TanStack Intent](https://tanstack.com/intent/latest/docs/overview) skills ship with the package for AI coding agents
 
@@ -97,6 +98,42 @@ npm run dev -- ./notes.txt -p "secret"
 | Compress folder | `<folder-name>.txt` |
 | Decompress text | `<input>.de.txt` |
 | Decompress folder | `<input>.de/` |
+
+## QR send
+
+Air-gap a compressed payload from a terminal to a phone (or any device with a camera). The sender loops QR frames; the receiver assembles them even when the camera drops frames.
+
+The protocol is **not** a one-shot slideshow:
+
+- Header frames repeat so a late camera still learns the session
+- Each lap **shuffles** chunk order so a periodic dropout does not always miss the same piece
+- Groups of 8 chunks carry an **XOR parity** frame that recovers one miss in the group
+- SHA-256 is checked before the payload is trusted
+
+```bash
+# Compress, then animate QR codes in the terminal
+text-compress send ./notes.md
+text-compress ./notes.md --send --fps 10
+
+# Already-compressed file: send as-is (no second compress)
+text-compress send ./notes.txt
+
+# Machine-readable one-lap dump (tests / debugging)
+text-compress send ./notes.md --dump --chunk-size 120
+```
+
+On the receiving device:
+
+```bash
+cd web-receiver
+npm install
+npm run dev            # same computer
+npm run dev:https      # phone on the LAN (accept the cert warning)
+```
+
+Open the shown URL, allow the camera, and point it at the terminal. A phone on the LAN needs `dev:https` (self-signed cert). `localhost` on this computer works over HTTP.
+
+Keys while sending: `q` or Ctrl+C stop, space pause, `+` / `-` change speed.
 
 ## Library
 
@@ -190,6 +227,10 @@ npm publish --access public
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEARNING.md).
 
 ## Changelog
+
+### v2.1.0 — `text-compress` (2026-08-29)
+
+- Add `send` / `--send`: loop QR frames in the terminal for camera receive (`web-receiver/`)
 
 ### v2.0.6 — `text-compress` (2026-07-13)
 

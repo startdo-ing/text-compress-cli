@@ -8,3 +8,5 @@ coverage/
 compressed.txt
 decompressed.de
 decompressed.de.txt
+web-receiver/dist/
+web-receiver/.svelte-kit/

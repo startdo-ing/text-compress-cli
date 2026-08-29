@@ -25,6 +25,8 @@ Options:
   -d, --dir <path>        Input folder (optional; same as passing <path>)
   -C, --compress          Always compress (even if input looks compressed)
   -D, --decompress        Always decompress
+  --send                  Stream the payload as looping QR codes (camera receive)
+  send <path>             Same as --send (optional subcommand)
   -o, --output <path>     Output path (optional, see defaults below)
   -s, --split <chars>     Split compressed output into multiple files. Each
                            part file is at most this many characters total,
@@ -41,6 +43,11 @@ Options:
                                  punctuation; only paste it somewhere that
                                  preserves text verbatim (e.g. a code block)
   -p, --password <string>  Password-protect on compress, or unlock on decompress
+  --fps <1-24>             QR send frame rate (default: 8)
+  --chunk-size <chars>     QR send payload chars per frame (default: fits terminal)
+  --ec <L|M|Q|H>           QR error correction (default: M)
+  --raw                    QR send the file as-is, without compressing
+  --dump                   Print one lap of QR frame text instead of animating
   -h, --help               Show this usage guide
   -V, --version            Show package version
 
@@ -68,6 +75,8 @@ Examples:
   text-compress output.01.txt
   text-compress -t "some text" -o output.txt
   text-compress --compress notes.txt
+  text-compress send notes.md
+  text-compress notes.md --send --fps 10
   npx text-compress ./somefile.md -p "hello-world"
 
 Every run prints analytics (encoding, size, ratio, time taken) after

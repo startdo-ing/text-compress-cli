@@ -22,6 +22,19 @@ export { unpackDirectory } from "./archive/unpack.js"
 export { assertDirectory, readTextFile } from "./fs/paths.js"
 // Low-level payload access
 export { decompressPayload, TAG_FOLDER, TAG_TEXT } from "./payload/tags.js"
+export type { ErrorCorrection, Frame, HeaderFrame, PayloadKind, Transfer } from "./qr/protocol.js"
+export {
+  createTransfer,
+  encodeData,
+  encodeHeader,
+  encodeParity,
+  framesForLap,
+  HEADER_EVERY,
+  PARITY_GROUP,
+  parseFrame,
+  SessionAssembler,
+  sha256Hex,
+} from "./qr/protocol.js"
 export type { SplitChunk } from "./split/parts.js"
 // Split-file helpers
 export {

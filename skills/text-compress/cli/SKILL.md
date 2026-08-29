@@ -2,12 +2,13 @@
 name: cli
 description: >
   text-compress CLI: auto-detect compress vs decompress from input path or -t
-  text, -e 64/85 encoding, -p password, -s split parts (or --no-split / -s 0), -o output, --compress
-  and --decompress force flags. No compress/decompress subcommands in v2.
+  text, -e 64/85 encoding, -p password, -s split parts (or --no-split / -s 0), -o output,
+  --compress and --decompress force flags, send / --send QR optical transfer.
+  No compress/decompress subcommands in v2.
 metadata:
   type: sub-skill
   library: text-compress
-  library_version: '2.0.2'
+  library_version: '2.1.0'
 sources:
   - startdo-ing/text-compress-cli:README.md
   - startdo-ing/text-compress-cli:src/cli/main.ts
@@ -70,6 +71,20 @@ text-compress ./output.7.txt      # decompress any split sibling
 text-compress --compress ./looks-compressed.txt
 text-compress --decompress ./plain.md
 ```
+
+### QR send (optical transfer)
+
+Compress, then loop QR frames in the terminal. A phone camera running
+`web-receiver` assembles the payload. Frames are shuffled per lap and
+carry XOR parity, so dropped camera frames do not stall the transfer.
+
+```bash
+text-compress send ./notes.md
+text-compress ./notes.md --send --fps 10
+cd web-receiver && npm install && npm run dev -- --host
+```
+
+Source: src/cli/commands/send.ts, src/qr/protocol.ts
 
 ## Default output paths (when `-o` omitted)
 

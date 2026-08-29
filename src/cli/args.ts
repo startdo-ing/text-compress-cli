@@ -10,6 +10,7 @@
 
 import { existsSync, statSync } from "node:fs"
 import { assertDirectory, readTextFile } from "../fs/paths.js"
+import type { ErrorCorrection } from "../qr/protocol.js"
 import type { Encoding } from "../types.js"
 
 /** Parsed CLI flags (before input resolution). */
@@ -23,8 +24,13 @@ export interface Args {
   /** Max chars per part, or `0` to disable splitting (`--no-split` / `-s 0`). */
   split?: number
   password?: string
-  /** Force compress or decompress instead of auto-detecting from input. */
-  mode?: "compress" | "decompress"
+  /** Force compress, decompress, or QR send instead of auto-detecting. */
+  mode?: "compress" | "decompress" | "send"
+  fps?: number
+  chunkSize?: number
+  ec?: ErrorCorrection
+  raw?: boolean
+  dump?: boolean
 }
 
 /** Reject multiple simultaneous input sources. */
@@ -76,6 +82,34 @@ export function parseArgs(argv: string[]): Args {
       args.mode = "compress"
     } else if (arg === "-D" || arg === "--decompress") {
       args.mode = "decompress"
+    } else if (arg === "--send") {
+      args.mode = "send"
+    } else if (arg === "--fps") {
+      const value = argv[++i]
+      const fps = Number(value)
+      if (!value || !Number.isInteger(fps) || fps < 1 || fps > 24) {
+        throw new Error(`Invalid --fps "${value}". Use an integer 1–24.`)
+      }
+      args.fps = fps
+    } else if (arg === "--chunk-size") {
+      const value = argv[++i]
+      const chunkSize = Number(value)
+      if (!value || !Number.isInteger(chunkSize) || chunkSize < 1) {
+        throw new Error(`Invalid --chunk-size "${value}". Use a positive integer.`)
+      }
+      args.chunkSize = chunkSize
+    } else if (arg === "--ec") {
+      const value = argv[++i]
+      if (!value) throw new Error("Missing value for --ec.")
+      const upper = value.toUpperCase()
+      if (upper !== "L" && upper !== "M" && upper !== "Q" && upper !== "H") {
+        throw new Error(`Invalid --ec "${value}". Use L, M, Q, or H.`)
+      }
+      args.ec = upper
+    } else if (arg === "--raw") {
+      args.raw = true
+    } else if (arg === "--dump") {
+      args.dump = true
     } else if (!arg.startsWith("-")) {
       if (args.path !== undefined || args.text !== undefined || args.file || args.dir) {
         throw new Error("Multiple inputs specified. Pass one path, or use -t, -f, or -d.")
@@ -91,7 +125,7 @@ export function parseArgs(argv: string[]): Args {
  *
  * Mutates `args` in place: e.g. a directory passed as `-f` becomes `args.dir`.
  */
-export function resolveInputArgs(args: Args, command: "compress" | "decompress"): void {
+export function resolveInputArgs(args: Args, command: "compress" | "decompress" | "send"): void {
   assertSingleInput(args)
   if (args.text !== undefined) return
 
