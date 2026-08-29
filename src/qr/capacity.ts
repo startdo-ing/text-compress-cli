@@ -6,6 +6,9 @@
  * Byte-mode capacities are from the QR Code spec. Terminal rendering uses
  * Unicode half-blocks (two modules per row), so vertical space is the usual
  * bottleneck.
+ *
+ * Chunk size is limited by the **largest** envelope (usually XOR parity),
+ * not the data chunk alone, so every frame can share one QR version.
  */
 
 import type { ErrorCorrection } from "./protocol.js"
@@ -30,9 +33,6 @@ const BYTE_CAPACITY: Record<ErrorCorrection, number[]> = {
   ],
 }
 
-/** Typical `TCQR1d|<sid>|<i>|<len>|` prefix length. */
-const FRAME_OVERHEAD = 32
-
 export interface TerminalSize {
   columns: number
   rows: number
@@ -52,6 +52,29 @@ export function qrByteCapacity(version: number, ec: ErrorCorrection): number {
   return table[index]
 }
 
+/** Smallest QR version whose byte-mode capacity is at least `bytes`. */
+export function versionForByteCount(bytes: number, ec: ErrorCorrection): number {
+  const table = BYTE_CAPACITY[ec]
+  for (let version = 1; version <= table.length; version++) {
+    if (table[version - 1] >= bytes) return version
+  }
+  throw new Error(`A ${bytes}-byte QR frame exceeds version ${table.length} at ECC ${ec}.`)
+}
+
+/**
+ * QR version that fits every frame in `frames` (UTF-8 byte length).
+ * All terminal paints should use this so the symbol size does not pulse.
+ */
+export function lockedQrVersion(frames: Iterable<string>, ec: ErrorCorrection): number {
+  let max = 0
+  const encoder = new TextEncoder()
+  for (const frame of frames) {
+    const n = encoder.encode(frame).length
+    if (n > max) max = n
+  }
+  return versionForByteCount(max, ec)
+}
+
 /**
  * Largest QR version whose symbol (plus quiet zone) fits in the terminal
  * when drawn with half-blocks.
@@ -65,18 +88,47 @@ export function versionForTerminal(size: TerminalSize, quietZone = 2): number {
 }
 
 /**
+ * Upper bound on encoded TCQR frame size for a given data-chunk length.
+ * Parity is Base64 of `chunkSize` uint16s, so it is the usual maximum
+ * once the header (SHA-256 + name) already fits.
+ */
+export function estimatedMaxFrameBytes(chunkSize: number, name = "payload.txt"): number {
+  const data = 28 + chunkSize
+  const body = 4 * Math.ceil((chunkSize * 2) / 3)
+  const parity = 26 + body
+  return Math.max(data, parity, estimatedHeaderBytes(name))
+}
+
+function estimatedHeaderBytes(name: string): number {
+  return [
+    "TCQR1h",
+    "ffffffff",
+    "999999",
+    "9999",
+    "99999999",
+    "a".repeat(64),
+    "c",
+    String(name.length),
+    name,
+  ].join("|").length
+}
+
+/**
  * Character budget for one data-frame payload, derived from terminal size.
- * Falls back to 180 when the terminal is tiny or size is unknown.
+ *
+ * Sized so header, data, and parity frames all fit the same QR version.
+ * The header’s SHA-256 may force a version larger than a tiny terminal
+ * would pick for data alone — that version is still locked for every frame.
  */
 export function recommendChunkSize(
   size: TerminalSize | undefined,
   ec: ErrorCorrection = "M",
+  name = "payload.txt",
 ): number {
-  if (!size || size.columns < 40 || size.rows < 16) {
-    return Math.max(40, qrByteCapacity(10, ec) - FRAME_OVERHEAD)
-  }
-  const version = versionForTerminal(size)
-  return Math.max(40, qrByteCapacity(version, ec) - FRAME_OVERHEAD)
+  const termVersion = !size || size.columns < 40 || size.rows < 16 ? 10 : versionForTerminal(size)
+  const headerVersion = versionForByteCount(estimatedHeaderBytes(name), ec)
+  const version = Math.max(termVersion, headerVersion)
+  return chunkSizeForCapacity(qrByteCapacity(version, ec), name)
 }
 
 export function readTerminalSize(): TerminalSize | undefined {
@@ -84,4 +136,20 @@ export function readTerminalSize(): TerminalSize | undefined {
   const rows = process.stdout.rows
   if (!columns || !rows) return undefined
   return { columns, rows }
+}
+
+function chunkSizeForCapacity(cap: number, name: string): number {
+  let lo = 1
+  let hi = cap
+  let best = 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (estimatedMaxFrameBytes(mid, name) <= cap) {
+      best = mid
+      lo = mid + 1
+    } else {
+      hi = mid - 1
+    }
+  }
+  return best
 }

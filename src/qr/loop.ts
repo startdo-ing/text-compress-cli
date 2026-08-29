@@ -4,6 +4,7 @@
  * Play a {@link Transfer} as a looping QR carousel on stdout.
  */
 
+import { lockedQrVersion } from "./capacity.js"
 import type { ErrorCorrection, Transfer } from "./protocol.js"
 import { framesForLap } from "./protocol.js"
 import { renderQr } from "./render.js"
@@ -46,6 +47,7 @@ export async function playQrLoop(transfer: Transfer, options: LoopOptions): Prom
   let lap = 0
   let frameIndex = 0
   let frames = framesForLap(transfer, lap)
+  const qrVersion = lockedQrVersion(frames, options.ec)
 
   const paint = Boolean(stdout.isTTY)
   if (paint && stdin.isTTY && stdin.setRawMode) {
@@ -87,7 +89,7 @@ export async function playQrLoop(transfer: Transfer, options: LoopOptions): Prom
       if (options.laps !== undefined && lap >= options.laps) break
       if (!paused) {
         const text = frames[frameIndex]
-        const qr = renderQr(text, options.ec)
+        const qr = renderQr(text, options.ec, qrVersion)
         const status = options.statusLine({
           lap,
           frame: frameIndex + 1,

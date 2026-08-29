@@ -7,7 +7,7 @@ description: >
 metadata:
   type: sub-skill
   library: text-compress
-  library_version: '2.1.1'
+  library_version: '2.1.2'
 sources:
   - startdo-ing/text-compress-cli:README.md
   - startdo-ing/text-compress-cli:src/index.ts

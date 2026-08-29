@@ -228,6 +228,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEA
 
 ## Changelog
 
+### v2.1.2 — `text-compress` (2026-08-29)
+
+- Lock every QR frame to one version so the terminal symbol stays the same size
+
 ### v2.1.1 — `text-compress` (2026-08-29)
 
 - Clear the terminal between QR frames so leftover glyphs cannot stack

@@ -22,7 +22,7 @@ export async function runSend(args: Args): Promise<void> {
   const fps = args.fps ?? DEFAULT_FPS
   const ec = args.ec ?? "M"
   const { payload, name, kind, note } = preparePayload(args)
-  const chunkSize = args.chunkSize ?? recommendChunkSize(readTerminalSize(), ec)
+  const chunkSize = args.chunkSize ?? recommendChunkSize(readTerminalSize(), ec, name)
   const transfer = await createTransfer({ payload, name, kind, chunkSize })
   const { header } = transfer
   const firstLap = framesForLap(transfer, 0)

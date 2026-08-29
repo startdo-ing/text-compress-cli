@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest"
 import { compress } from "../src/api/text.js"
-import { recommendChunkSize, versionForTerminal } from "../src/qr/capacity.js"
+import {
+  estimatedMaxFrameBytes,
+  qrByteCapacity,
+  recommendChunkSize,
+  versionForByteCount,
+  versionForTerminal,
+} from "../src/qr/capacity.js"
 import { playQrLoop } from "../src/qr/loop.js"
 import {
   createTransfer,
@@ -160,6 +166,13 @@ describe("QR terminal render", () => {
     }
   })
 
+  it("keeps the same module grid when a version is locked", () => {
+    const version = 8
+    const small = renderQr("hi", "M", version)
+    const large = renderQr("x".repeat(80), "M", version)
+    expect(small.split("\n").length).toBe(large.split("\n").length)
+  })
+
   it("erases the TTY between frames so leftover rows cannot accumulate", async () => {
     const { PassThrough } = await import("node:stream")
     const chunks: string[] = []
@@ -173,7 +186,7 @@ describe("QR terminal render", () => {
     const stdin = new PassThrough() as unknown as NodeJS.ReadStream
     Object.assign(stdin, { isTTY: false })
     const transfer = await createTransfer({
-      payload: "tiny",
+      payload: "abcdefghijklmnopqrstuvwxyz",
       name: "t.txt",
       kind: "raw",
       chunkSize: 8,
@@ -189,6 +202,8 @@ describe("QR terminal render", () => {
     })
     const paints = chunks.filter((c) => c.includes("status"))
     expect(paints.length).toBeGreaterThan(1)
+    const heights = paints.map((paint) => paint.split("\n").length)
+    expect(new Set(heights).size).toBe(1)
     for (const paint of paints) {
       expect(paint).toContain("\x1b[2J")
       expect(paint).toContain("\x1b[J")
@@ -199,6 +214,15 @@ describe("QR terminal render", () => {
 describe("QR capacity", () => {
   it("picks a version that fits a typical terminal", () => {
     expect(versionForTerminal({ columns: 80, rows: 24 })).toBeGreaterThanOrEqual(5)
-    expect(recommendChunkSize({ columns: 80, rows: 24 }, "M")).toBeGreaterThan(40)
+  })
+
+  it("sizes chunks so header, data, and parity fit one QR version", () => {
+    const size = { columns: 80, rows: 24 }
+    const chunk = recommendChunkSize(size, "M")
+    const maxFrame = estimatedMaxFrameBytes(chunk)
+    const version = versionForByteCount(maxFrame, "M")
+    expect(chunk).toBeGreaterThanOrEqual(1)
+    expect(qrByteCapacity(version, "M")).toBeGreaterThanOrEqual(maxFrame)
+    expect(version).toBeGreaterThanOrEqual(versionForTerminal(size))
   })
 })
