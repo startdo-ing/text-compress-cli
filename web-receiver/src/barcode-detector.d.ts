@@ -4,6 +4,7 @@ declare namespace BarcodeDetector {
 
 interface DetectedBarcode {
   rawValue: string
+  boundingBox?: DOMRectReadOnly
 }
 
 declare class BarcodeDetector {

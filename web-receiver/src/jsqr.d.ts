@@ -4,5 +4,13 @@ declare module "jsqr" {
     width: number,
     height: number,
     options?: { inversionAttempts?: "dontInvert" | "onlyInvert" | "attemptBoth" | "invertFirst" },
-  ): { data: string } | null
+  ): {
+    data: string
+    location: {
+      topLeftCorner: { x: number; y: number }
+      topRightCorner: { x: number; y: number }
+      bottomLeftCorner: { x: number; y: number }
+      bottomRightCorner: { x: number; y: number }
+    }
+  } | null
 }

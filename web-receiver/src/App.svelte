@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { parseFrame, SessionAssembler } from "../../src/qr/protocol"
-	import { scanImageFile, startCamera, startScanner, type ScanHandle } from "./lib/scanner"
+	import {
+		scanImageFile,
+		startCamera,
+		startScanner,
+		type ScanBox,
+		type ScanHandle,
+	} from "./lib/scanner"
 
 	type Phase = "idle" | "live" | "complete"
 
@@ -20,6 +26,15 @@
 	let scan: ScanHandle | null = null
 	let stream: MediaStream | null = null
 	let completing = false
+	let lockBox = $state.raw<ScanBox | null>(null)
+	let finderW = $state(0)
+	let finderH = $state(0)
+	let videoW = $state(0)
+	let videoH = $state(0)
+
+	let view = $derived.by(() =>
+		coverOrigin(lockBox, videoW, videoH, finderW, finderH, phase === "live"),
+	)
 
 	let progressLabel = $derived(
 		needed === 0 ? "Waiting for a header frame" : `${received} of ${needed} chunks`,
@@ -36,6 +51,7 @@
 				if (value !== null) {
 					payload = value
 					phase = "complete"
+					lockBox = null
 					scan?.stop()
 					scan = null
 					stopStream()
@@ -80,6 +96,7 @@
 			return
 		}
 		resetAssembler()
+		lockBox = null
 		phase = "live"
 		try {
 			const media = await startCamera()
@@ -90,7 +107,16 @@
 			}
 			el.srcObject = media
 			await el.play()
-			scan = await startScanner(el, onScan)
+			scan = await startScanner(
+				el,
+				(hit) => {
+					if (hit.box) lockBox = blendBox(lockBox, hit.box)
+					onScan(hit.text)
+				},
+				(box) => {
+					lockBox = blendBox(lockBox, box)
+				},
+			)
 		} catch (err) {
 			error = cameraErrorMessage(err)
 			stopLive()
@@ -123,6 +149,7 @@
 		scan?.stop()
 		scan = null
 		stopStream()
+		lockBox = null
 		phase = payload ? "complete" : "idle"
 	}
 
@@ -162,6 +189,7 @@
 		scan?.stop()
 		scan = null
 		resetAssembler()
+		lockBox = null
 		phase = "idle"
 		error = ""
 	}
@@ -176,6 +204,47 @@
 		}
 		return err instanceof Error ? err.message : "Could not open the camera."
 	}
+
+	function blendBox(prev: ScanBox | null, next: ScanBox): ScanBox {
+		if (!prev) return next
+		const a = 0.4
+		return {
+			x: prev.x + (next.x - prev.x) * a,
+			y: prev.y + (next.y - prev.y) * a,
+			w: prev.w + (next.w - prev.w) * a,
+			h: prev.h + (next.h - prev.h) * a,
+		}
+	}
+
+	function attachCamera(node: HTMLVideoElement) {
+		videoEl = node
+		return () => {
+			if (videoEl === node) videoEl = null
+		}
+	}
+
+	function coverOrigin(
+		box: ScanBox | null,
+		vw: number,
+		vh: number,
+		elw: number,
+		elh: number,
+		live: boolean,
+	): { ox: number; oy: number; zoom: number } {
+		if (!live || !box || vw < 1 || vh < 1 || elw < 1 || elh < 1) {
+			return { ox: 50, oy: 50, zoom: 1 }
+		}
+		const s = Math.max(elw / vw, elh / vh)
+		const dispW = vw * s
+		const dispH = vh * s
+		const offX = (elw - dispW) / 2
+		const offY = (elh - dispH) / 2
+		const cx = offX + (box.x + box.w / 2) * s
+		const cy = offY + (box.y + box.h / 2) * s
+		const frac = Math.max(box.w / vw, box.h / vh)
+		const zoom = Math.min(4.8, Math.max(1.2, 0.72 / Math.max(frac, 0.08)))
+		return { ox: (cx / elw) * 100, oy: (cy / elh) * 100, zoom }
+	}
 </script>
 
 <svelte:head>
@@ -188,14 +257,24 @@
 			<p class="eyebrow">text-compress</p>
 			<h1>Optical receive</h1>
 			<p class="lede">
-				Point this camera at the looping QR in the terminal. Missed frames are fine — it loops
-				until every chunk lands.
+				Point this camera at the looping QR in the terminal. The viewfinder locks onto the code
+				from across the room. Missed frames are fine — it loops until every chunk lands.
 			</p>
 		</header>
 
-		<section class="viewfinder" aria-label="Camera viewfinder">
+		<section
+			class="viewfinder"
+			aria-label="Camera viewfinder"
+			bind:clientWidth={finderW}
+			bind:clientHeight={finderH}
+			style:--zoom={view.zoom}
+			style:--ox="{view.ox}%"
+			style:--oy="{view.oy}%"
+		>
 			<video
-				bind:this={videoEl}
+				{@attach attachCamera}
+				bind:videoWidth={videoW}
+				bind:videoHeight={videoH}
 				class={["camera", { off: phase !== "live" }]}
 				autoplay
 				playsinline
@@ -306,6 +385,9 @@
 	}
 
 	.viewfinder {
+		--zoom: 1;
+		--ox: 50%;
+		--oy: 50%;
 		position: relative;
 		overflow: hidden;
 		border-radius: 1.15rem;
@@ -323,6 +405,12 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+	}
+
+	.camera {
+		transform: scale(var(--zoom));
+		transform-origin: var(--ox) var(--oy);
+		transition: transform 0.45s cubic-bezier(0.2, 0, 0, 1);
 	}
 
 	.camera.off {

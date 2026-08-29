@@ -10,6 +10,7 @@ import type { ErrorCorrection } from "./protocol.js"
 
 const RESET = "\x1b[0m"
 const PAPER = "\x1b[48;5;231m\x1b[38;5;16m"
+const ERASE_LINE = "\x1b[K"
 
 /** Draw `text` as a compact QR for a terminal. */
 export function renderQr(text: string, ec: ErrorCorrection = "M"): string {
@@ -31,7 +32,8 @@ export function renderQr(text: string, ec: ErrorCorrection = "M"): string {
       const bot = y + 1 < dim ? dark(x, y + 1) : false
       line += top && bot ? "█" : top ? "▀" : bot ? "▄" : " "
     }
-    line += RESET
+    // Erase to end of line so a smaller QR cannot leave glyphs from the last frame.
+    line += `${RESET}${ERASE_LINE}`
     lines.push(line)
   }
 

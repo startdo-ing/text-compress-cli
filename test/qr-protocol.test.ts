@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { compress } from "../src/api/text.js"
 import { recommendChunkSize, versionForTerminal } from "../src/qr/capacity.js"
+import { playQrLoop } from "../src/qr/loop.js"
 import {
   createTransfer,
   framesForLap,
@@ -9,6 +10,7 @@ import {
   SessionAssembler,
   sha256Hex,
 } from "../src/qr/protocol.js"
+import { renderQr } from "../src/qr/render.js"
 
 describe("TCQR protocol", () => {
   it("round-trips a payload from a sequential lap", async () => {
@@ -145,6 +147,52 @@ describe("TCQR protocol", () => {
     const assembler = new SessionAssembler()
     for (const frame of framesForLap(transfer, 0)) assembler.addText(frame)
     await expect(assembler.assemble()).resolves.toBe(payload)
+  })
+})
+
+describe("QR terminal render", () => {
+  it("erases to the end of each row so a smaller frame cannot leave glyphs", () => {
+    const qr = renderQr("TCQR1h|abcd1234|n|k|1|40|M|deadbeef")
+    const lines = qr.split("\n")
+    expect(lines.length).toBeGreaterThan(8)
+    for (const line of lines) {
+      expect(line.endsWith("\x1b[K")).toBe(true)
+    }
+  })
+
+  it("erases the TTY between frames so leftover rows cannot accumulate", async () => {
+    const { PassThrough } = await import("node:stream")
+    const chunks: string[] = []
+    const stdout = {
+      isTTY: true,
+      write(value: string) {
+        chunks.push(value)
+        return true
+      },
+    } as unknown as NodeJS.WriteStream
+    const stdin = new PassThrough() as unknown as NodeJS.ReadStream
+    Object.assign(stdin, { isTTY: false })
+    const transfer = await createTransfer({
+      payload: "tiny",
+      name: "t.txt",
+      kind: "raw",
+      chunkSize: 8,
+      sessionId: "abcdabcd",
+    })
+    await playQrLoop(transfer, {
+      fps: 24,
+      ec: "M",
+      laps: 1,
+      stdout,
+      stdin,
+      statusLine: () => "status",
+    })
+    const paints = chunks.filter((c) => c.includes("status"))
+    expect(paints.length).toBeGreaterThan(1)
+    for (const paint of paints) {
+      expect(paint).toContain("\x1b[2J")
+      expect(paint).toContain("\x1b[J")
+    }
   })
 })
 

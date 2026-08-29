@@ -228,6 +228,11 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEA
 
 ## Changelog
 
+### v2.1.1 — `text-compress` (2026-08-29)
+
+- Clear the terminal between QR frames so leftover glyphs cannot stack
+- Locate and zoom onto a distant QR in the web-receiver instead of downscaling the whole camera frame
+
 ### v2.1.0 — `text-compress` (2026-08-29)
 
 - Add `send` / `--send`: loop QR frames in the terminal for camera receive (`web-receiver/`)

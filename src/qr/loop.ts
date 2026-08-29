@@ -27,7 +27,10 @@ export interface LoopOptions {
 const ENTER_ALT = "\x1b[?1049h\x1b[?25l"
 const LEAVE_ALT = "\x1b[?25h\x1b[?1049l"
 const HOME = "\x1b[H"
-const CLEAR = "\x1b[2J"
+const ERASE_ALL = "\x1b[2J"
+const ERASE_DOWN = "\x1b[J"
+const SYNC_START = "\x1b[?2026h"
+const SYNC_END = "\x1b[?2026l"
 
 /**
  * Display QR frames in the alternate screen buffer until aborted.
@@ -44,8 +47,8 @@ export async function playQrLoop(transfer: Transfer, options: LoopOptions): Prom
   let frameIndex = 0
   let frames = framesForLap(transfer, lap)
 
-  const isTty = Boolean(stdout.isTTY && stdin.isTTY)
-  if (isTty && stdin.setRawMode) {
+  const paint = Boolean(stdout.isTTY)
+  if (paint && stdin.isTTY && stdin.setRawMode) {
     stdin.setRawMode(true)
     stdin.resume()
     stdin.setEncoding("utf8")
@@ -64,11 +67,11 @@ export async function playQrLoop(transfer: Transfer, options: LoopOptions): Prom
 
   const restore = () => {
     stdin.off("data", onData)
-    if (isTty && stdin.setRawMode) {
+    if (paint && stdin.isTTY && stdin.setRawMode) {
       stdin.setRawMode(false)
       stdin.pause()
     }
-    if (isTty) stdout.write(LEAVE_ALT)
+    if (paint) stdout.write(LEAVE_ALT)
   }
 
   const onSignal = () => {
@@ -77,7 +80,7 @@ export async function playQrLoop(transfer: Transfer, options: LoopOptions): Prom
   process.on("SIGINT", onSignal)
   process.on("SIGTERM", onSignal)
 
-  if (isTty) stdout.write(ENTER_ALT + CLEAR)
+  if (paint) stdout.write(ENTER_ALT + ERASE_ALL + HOME)
 
   try {
     while (!aborted) {
@@ -92,8 +95,12 @@ export async function playQrLoop(transfer: Transfer, options: LoopOptions): Prom
           paused,
           fps,
         })
-        if (isTty) {
-          stdout.write(`${HOME}${qr}\n\n${status}\n`)
+        if (paint) {
+          // Home + erase all: header/data frames have different QR versions, so
+          // a HOME-only paint leaves the previous symbol's bottom rows behind.
+          stdout.write(
+            `${SYNC_START}${HOME}${ERASE_ALL}${HOME}${qr}\n\n${status}\n${ERASE_DOWN}${SYNC_END}`,
+          )
         } else {
           stdout.write(`${qr}\n\n${status}\n`)
         }
