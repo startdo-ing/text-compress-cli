@@ -1,6 +1,7 @@
 /**
  * Scan QR payloads from a live camera or a still image.
- * Locates the bright QR card in the frame, zooms into it, then decodes.
+ * Locates the bright QR card, then locks crop and zoom so the
+ * viewfinder does not hunt while frames loop.
  */
 
 import jsQR from "jsqr"
@@ -11,6 +12,9 @@ export type ScanHandle = { stop: () => void }
 
 const ZOOM_TARGET = 720
 const LOCATE_WIDTH = 480
+const MISS_UNLOCK = 24
+
+type Detector = BarcodeDetector | null
 
 export async function startCamera(): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({
@@ -26,25 +30,40 @@ export async function startCamera(): Promise<MediaStream> {
 export async function startScanner(
   video: HTMLVideoElement,
   onHit: (hit: ScanHit) => void,
-  onBox?: (box: ScanBox) => void,
+  onLock?: (box: ScanBox | null) => void,
 ): Promise<ScanHandle> {
   const detector = await createDetector()
   let stopped = false
   let busy = false
   let raf = 0
+  let cropLock: ScanBox | null = null
+  let misses = 0
   const canvas = document.createElement("canvas")
   const ctx = canvas.getContext("2d", { willReadFrequently: true })
 
   const tick = () => {
     if (stopped) return
     raf = requestAnimationFrame(tick)
-    if (busy || video.readyState < 2) return
+    if (busy || video.readyState < 2 || !ctx) return
     busy = true
-    void detectFrame(video, detector, canvas, ctx, (box) => {
-      if (!stopped) onBox?.(box)
-    })
-      .then((hit) => {
-        if (hit && !stopped) onHit(hit)
+    void runLockedScan(video, detector, canvas, ctx, cropLock)
+      .then((result) => {
+        if (stopped) return
+        if (cropLock && !result.hit) {
+          misses += 1
+          if (misses >= MISS_UNLOCK) {
+            cropLock = null
+            misses = 0
+            onLock?.(null)
+          }
+          return
+        }
+        misses = 0
+        if (result.lock && !cropLock) {
+          cropLock = result.lock
+          onLock?.(cropLock)
+        }
+        if (result.hit) onHit(result.hit)
       })
       .finally(() => {
         busy = false
@@ -74,11 +93,27 @@ export async function scanImageFile(file: File): Promise<string | null> {
   ctx.canvas.width = bitmap.width
   ctx.canvas.height = bitmap.height
   ctx.drawImage(bitmap, 0, 0)
-  const hit = await detectFromSource(bitmap, fakeVideo, detector, canvas, ctx, undefined)
+  const hit = await detectFromSource(bitmap, fakeVideo, detector, canvas, ctx)
   return hit?.text ?? null
 }
 
-type Detector = BarcodeDetector | null
+async function runLockedScan(
+  video: HTMLVideoElement,
+  detector: Detector,
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  cropLock: ScanBox | null,
+): Promise<{ hit: ScanHit | null; lock: ScanBox | null }> {
+  const vw = video.videoWidth || 1
+  const vh = video.videoHeight || 1
+  if (cropLock) {
+    const hit = await decodeCrop(video, padBox(cropLock, vw, vh, 0.2), detector, canvas, ctx)
+    return { hit, lock: cropLock }
+  }
+  const hit = await detectFromSource(video, video, detector, canvas, ctx)
+  const lock = hit?.box ? padBox(hit.box, vw, vh, 0.18) : null
+  return { hit, lock }
+}
 
 async function createDetector(): Promise<Detector> {
   if (!("BarcodeDetector" in window)) return null
@@ -91,33 +126,18 @@ async function createDetector(): Promise<Detector> {
   }
 }
 
-async function detectFrame(
-  video: HTMLVideoElement,
-  detector: Detector,
-  canvas: HTMLCanvasElement,
-  ctx: CanvasRenderingContext2D | null,
-  onBox?: (box: ScanBox) => void,
-): Promise<ScanHit | null> {
-  if (!ctx) return null
-  return detectFromSource(video, video, detector, canvas, ctx, onBox)
-}
-
 async function detectFromSource(
   source: CanvasImageSource,
   size: { videoWidth: number; videoHeight: number },
   detector: Detector,
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
-  onBox: ((box: ScanBox) => void) | undefined,
 ): Promise<ScanHit | null> {
   const vw = size.videoWidth || 1
   const vh = size.videoHeight || 1
 
   const native = await detectNative(source, detector)
-  if (native) {
-    if (native.box) onBox?.(native.box)
-    return native
-  }
+  if (native) return native
 
   const locateScale = Math.min(1, LOCATE_WIDTH / vw)
   const lw = Math.max(1, Math.round(vw * locateScale))
@@ -129,9 +149,7 @@ async function detectFromSource(
   const bright = findBrightRegion(preview)
   const boxes: ScanBox[] = []
   if (bright) {
-    const scaled = scaleBox(bright, vw / lw, vh / lh)
-    onBox?.(scaled)
-    boxes.push(scaled)
+    boxes.push(scaleBox(bright, vw / lw, vh / lh))
   }
   boxes.push(centerBox(vw, vh, 0.5), centerBox(vw, vh, 0.32))
 

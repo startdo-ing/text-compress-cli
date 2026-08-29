@@ -8,6 +8,8 @@
 		type ScanHandle,
 	} from "./lib/scanner"
 
+	const version = __TC_VERSION__
+
 	type Phase = "idle" | "live" | "complete"
 
 	let phase = $state<Phase>("idle")
@@ -41,8 +43,9 @@
 	)
 	let percent = $derived(needed === 0 ? 0 : Math.round((received / needed) * 100))
 
-	function onScan(text: string) {
+	function onScan(text: string, box?: ScanBox) {
 		if (parseFrame(text) === null) return
+		if (!lockBox && box) lockBox = box
 		assembler.addText(text)
 		syncFromAssembler()
 		if (assembler.hasAllChunks && !completing && payload === null) {
@@ -110,11 +113,10 @@
 			scan = await startScanner(
 				el,
 				(hit) => {
-					if (hit.box) lockBox = blendBox(lockBox, hit.box)
-					onScan(hit.text)
+					onScan(hit.text, hit.box)
 				},
 				(box) => {
-					lockBox = blendBox(lockBox, box)
+					if (box === null) lockBox = null
 				},
 			)
 		} catch (err) {
@@ -205,17 +207,6 @@
 		return err instanceof Error ? err.message : "Could not open the camera."
 	}
 
-	function blendBox(prev: ScanBox | null, next: ScanBox): ScanBox {
-		if (!prev) return next
-		const a = 0.4
-		return {
-			x: prev.x + (next.x - prev.x) * a,
-			y: prev.y + (next.y - prev.y) * a,
-			w: prev.w + (next.w - prev.w) * a,
-			h: prev.h + (next.h - prev.h) * a,
-		}
-	}
-
 	function attachCamera(node: HTMLVideoElement) {
 		videoEl = node
 		return () => {
@@ -248,13 +239,13 @@
 </script>
 
 <svelte:head>
-	<title>text-compress receiver</title>
+	<title>text-compress receiver v{version}</title>
 </svelte:head>
 
 <div class="stage">
 	<main>
 		<header class="hud">
-			<p class="eyebrow">text-compress</p>
+			<p class="eyebrow">text-compress <span class="ver">v{version}</span></p>
 			<h1>Optical receive</h1>
 			<p class="lede">
 				Point this camera at the looping QR in the terminal. The viewfinder locks onto the code
@@ -366,6 +357,14 @@
 		font-size: 0.72rem;
 		letter-spacing: 0.18em;
 		text-transform: uppercase;
+	}
+
+	.ver {
+		margin-left: 0.45rem;
+		color: var(--muted);
+		letter-spacing: 0.06em;
+		text-transform: none;
+		font-variant-numeric: tabular-nums;
 	}
 
 	h1 {
