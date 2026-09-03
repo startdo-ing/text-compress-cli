@@ -228,6 +228,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEA
 
 ## Changelog
 
+### v2.1.3 — `text-compress` (2026-09-03)
+
+- Paint four QR codes per tick (2×2) and decode them together in a web worker
+
 ### v2.1.2 — `text-compress` (2026-08-29)
 
 - Lock every QR frame to one version so the terminal symbol stays the same size
