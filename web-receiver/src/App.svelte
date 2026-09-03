@@ -5,10 +5,15 @@
 		startCamera,
 		startScanner,
 		type ScanBox,
+		type ScanEngines,
 		type ScanHandle,
 	} from "./lib/scanner"
 
 	const version = __TC_VERSION__
+	const gitSha = __TC_GIT_SHA__ || "unknown"
+	const gitBranch = __TC_GIT_BRANCH__ || "unknown"
+	const gitDirty = __TC_GIT_DIRTY__
+	const commitLabel = gitDirty ? `${gitSha}*` : gitSha
 
 	type Phase = "idle" | "live" | "complete"
 
@@ -33,6 +38,23 @@
 	let finderH = $state(0)
 	let videoW = $state(0)
 	let videoH = $state(0)
+	let engines = $state.raw<ScanEngines | null>(null)
+
+	let zxingLabel = $derived(
+		engines === null
+			? "starting"
+			: engines.zxing
+				? "ready"
+				: engines.settled
+					? "unavailable"
+					: "loading",
+	)
+	let detectorLabel = $derived(
+		engines === null ? "starting" : engines.barcodeDetector ? "yes" : "no",
+	)
+	let workerLabel = $derived(
+		engines === null ? "starting" : engines.worker ? "web worker" : "failed",
+	)
 
 	let view = $derived.by(() =>
 		coverOrigin(lockBox, videoW, videoH, finderW, finderH, phase === "live"),
@@ -43,9 +65,8 @@
 	)
 	let percent = $derived(needed === 0 ? 0 : Math.round((received / needed) * 100))
 
-	function onScan(text: string, box?: ScanBox) {
+	function onScan(text: string) {
 		if (parseFrame(text) === null) return
-		if (!lockBox && box) lockBox = box
 		assembler.addText(text)
 		syncFromAssembler()
 		if (assembler.hasAllChunks && !completing && payload === null) {
@@ -113,10 +134,13 @@
 			scan = await startScanner(
 				el,
 				(hit) => {
-					onScan(hit.text, hit.box)
+					onScan(hit.text)
 				},
 				(box) => {
-					if (box === null) lockBox = null
+					lockBox = box
+				},
+				(next) => {
+					engines = next
 				},
 			)
 		} catch (err) {
@@ -161,12 +185,12 @@
 		input.value = ""
 		if (!file) return
 		error = ""
-		const text = await scanImageFile(file)
-		if (!text) {
-			error = "No QR code in that image. Fill the frame with the terminal QR and try again."
+		const texts = await scanImageFile(file)
+		if (texts.length === 0) {
+			error = "No QR code in that image. Fill the frame with the terminal QR grid and try again."
 			return
 		}
-		onScan(text)
+		for (const text of texts) onScan(text)
 	}
 
 	async function copyPayload() {
@@ -233,25 +257,60 @@
 		const cx = offX + (box.x + box.w / 2) * s
 		const cy = offY + (box.y + box.h / 2) * s
 		const frac = Math.max(box.w / vw, box.h / vh)
-		const zoom = Math.min(4.8, Math.max(1.2, 0.72 / Math.max(frac, 0.08)))
+		const zoom = Math.min(2.2, Math.max(1.05, 0.92 / Math.max(frac, 0.12)))
 		return { ox: (cx / elw) * 100, oy: (cy / elh) * 100, zoom }
 	}
 </script>
 
 <svelte:head>
-	<title>text-compress receiver v{version}</title>
+	<title>text-compress receiver v{version} · {commitLabel}</title>
 </svelte:head>
 
 <div class="stage">
 	<main>
 		<header class="hud">
-			<p class="eyebrow">text-compress <span class="ver">v{version}</span></p>
+			<p class="eyebrow">text-compress receiver</p>
 			<h1>Optical receive</h1>
 			<p class="lede">
-				Point this camera at the looping QR in the terminal. The viewfinder locks onto the code
-				from across the room. Missed frames are fine — it loops until every chunk lands.
+				Point this camera at the 2×2 QR grid in the terminal. The viewfinder locks onto the
+				whole card. Missed frames are fine — it loops until every chunk lands.
 			</p>
 		</header>
+
+		<aside class="build" aria-label="Receiver build">
+			<p class="build-id">v{version}</p>
+			<dl>
+				<div>
+					<dt>Commit</dt>
+					<dd>
+						<code>{commitLabel}</code>
+						<span>{gitBranch}</span>
+						{#if gitDirty}<span>local changes</span>{/if}
+					</dd>
+				</div>
+				<div>
+					<dt>Protocol</dt>
+					<dd>TCQR v1</dd>
+				</div>
+				<div>
+					<dt>Decode</dt>
+					<dd>web worker · zxing-wasm · BarcodeDetector · jsQR</dd>
+				</div>
+				{#if engines}
+					<div>
+						<dt>Engines</dt>
+						<dd>
+							<span class={["flag", { on: engines.worker }]}>{workerLabel}</span>
+							<span class={["flag", { on: engines.zxing }]}>zxing-wasm {zxingLabel}</span>
+							<span class={["flag", { on: engines.barcodeDetector }]}
+								>BarcodeDetector {detectorLabel}</span
+							>
+							<span class="flag on">jsQR fallback</span>
+						</dd>
+					</div>
+				{/if}
+			</dl>
+		</aside>
 
 		<section
 			class="viewfinder"
@@ -359,14 +418,6 @@
 		text-transform: uppercase;
 	}
 
-	.ver {
-		margin-left: 0.45rem;
-		color: var(--muted);
-		letter-spacing: 0.06em;
-		text-transform: none;
-		font-variant-numeric: tabular-nums;
-	}
-
 	h1 {
 		margin: 0;
 		font-family: var(--sans);
@@ -381,6 +432,65 @@
 		max-width: 36ch;
 		color: var(--muted);
 		font-size: 0.9rem;
+	}
+
+	.build {
+		display: grid;
+		gap: 0.55rem;
+		padding: 0.85rem 1rem 0.95rem;
+		border-radius: 0.9rem;
+		background: oklch(0.16 0.03 250 / 0.92);
+		box-shadow: 0 0 0 1px oklch(1 0 0 / 0.08);
+	}
+
+	.build-id {
+		margin: 0;
+		color: var(--filament);
+		font-size: 1.05rem;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.04em;
+	}
+
+	.build dl {
+		display: grid;
+		gap: 0.45rem;
+		margin: 0;
+	}
+
+	.build dl > div {
+		display: grid;
+		grid-template-columns: 6.75rem minmax(0, 1fr);
+		gap: 0.65rem 0.85rem;
+		align-items: baseline;
+	}
+
+	.build dt {
+		color: var(--muted);
+		font-size: 0.72rem;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+	}
+
+	.build dd {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem 0.7rem;
+		margin: 0;
+		color: var(--paper);
+		font-size: 0.82rem;
+	}
+
+	.build code {
+		font: inherit;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.flag {
+		color: var(--muted);
+	}
+
+	.flag.on {
+		color: var(--ok);
 	}
 
 	.viewfinder {

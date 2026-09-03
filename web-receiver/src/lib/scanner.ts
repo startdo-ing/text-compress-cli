@@ -1,73 +1,104 @@
 /**
  * Scan QR payloads from a live camera or a still image.
- * Locates the bright QR card, then locks crop and zoom so the
- * viewfinder does not hunt while frames loop.
+ * Frames are decoded in a web worker (zxing-wasm + BarcodeDetector + jsQR)
+ * so the UI thread can keep grabbing the latest 8fps sender frame.
  */
 
-import jsQR from "jsqr"
+import type { ScanBox, ScanEngines, ScanHit, WorkerIn, WorkerOut } from "./scan-types"
 
-export type ScanBox = { x: number; y: number; w: number; h: number }
-export type ScanHit = { text: string; box?: ScanBox }
+export type { ScanBox, ScanEngines, ScanHit }
 export type ScanHandle = { stop: () => void }
 
-const ZOOM_TARGET = 720
-const LOCATE_WIDTH = 480
 const MISS_UNLOCK = 24
 
-type Detector = BarcodeDetector | null
-
 export async function startCamera(): Promise<MediaStream> {
-  return navigator.mediaDevices.getUserMedia({
+  const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
     video: {
       facingMode: { ideal: "environment" },
       width: { ideal: 1920 },
       height: { ideal: 1080 },
+      frameRate: { ideal: 30 },
     },
   })
+  await tuneCamera(stream)
+  return stream
 }
 
 export async function startScanner(
   video: HTMLVideoElement,
   onHit: (hit: ScanHit) => void,
   onLock?: (box: ScanBox | null) => void,
+  onEngines?: (engines: ScanEngines) => void,
 ): Promise<ScanHandle> {
-  const detector = await createDetector()
+  const worker = spawnWorker(onEngines)
+  await waitReady(worker)
   let stopped = false
   let busy = false
+  let pending = false
   let raf = 0
+  let nextId = 1
   let cropLock: ScanBox | null = null
   let misses = 0
-  const canvas = document.createElement("canvas")
-  const ctx = canvas.getContext("2d", { willReadFrequently: true })
+
+  const sendFrame = () => {
+    if (stopped || busy || video.readyState < 2) return
+    busy = true
+    pending = false
+    const id = nextId
+    nextId += 1
+    void createImageBitmap(video)
+      .then((bitmap) => {
+        if (stopped) {
+          bitmap.close()
+          busy = false
+          return
+        }
+        const message: WorkerIn = { type: "scan", id, bitmap, lock: cropLock }
+        worker.postMessage(message, [bitmap])
+      })
+      .catch(() => {
+        busy = false
+      })
+  }
+
+  worker.onmessage = (event: MessageEvent<WorkerOut>) => {
+    const data = event.data
+    if (data.type !== "result") return
+    busy = false
+    if (stopped) return
+    if (cropLock && data.hits.length === 0) {
+      misses += 1
+      if (misses >= MISS_UNLOCK) {
+        cropLock = null
+        misses = 0
+        onLock?.(null)
+      }
+    } else {
+      misses = 0
+      if (data.lock) {
+        if (!cropLock || (data.hits.length >= 2 && boxArea(data.lock) > boxArea(cropLock))) {
+          cropLock = data.lock
+          onLock?.(cropLock)
+        }
+      }
+      for (const hit of data.hits) onHit(hit)
+    }
+    if (pending) sendFrame()
+  }
+
+  worker.onerror = () => {
+    busy = false
+  }
 
   const tick = () => {
     if (stopped) return
     raf = requestAnimationFrame(tick)
-    if (busy || video.readyState < 2 || !ctx) return
-    busy = true
-    void runLockedScan(video, detector, canvas, ctx, cropLock)
-      .then((result) => {
-        if (stopped) return
-        if (cropLock && !result.hit) {
-          misses += 1
-          if (misses >= MISS_UNLOCK) {
-            cropLock = null
-            misses = 0
-            onLock?.(null)
-          }
-          return
-        }
-        misses = 0
-        if (result.lock && !cropLock) {
-          cropLock = result.lock
-          onLock?.(cropLock)
-        }
-        if (result.hit) onHit(result.hit)
-      })
-      .finally(() => {
-        busy = false
-      })
+    if (busy) {
+      pending = true
+      return
+    }
+    sendFrame()
   }
   raf = requestAnimationFrame(tick)
 
@@ -75,268 +106,93 @@ export async function startScanner(
     stop() {
       stopped = true
       cancelAnimationFrame(raf)
+      worker.terminate()
     },
   }
 }
 
-export async function scanImageFile(file: File): Promise<string | null> {
+export async function scanImageFile(file: File): Promise<string[]> {
   const bitmap = await createImageBitmap(file)
-  const canvas = document.createElement("canvas")
-  const ctx = canvas.getContext("2d", { willReadFrequently: true })
-  if (!ctx) return null
-  const detector = await createDetector()
-  const fakeVideo = {
-    videoWidth: bitmap.width,
-    videoHeight: bitmap.height,
-    readyState: 4,
-  } as HTMLVideoElement
-  ctx.canvas.width = bitmap.width
-  ctx.canvas.height = bitmap.height
-  ctx.drawImage(bitmap, 0, 0)
-  const hit = await detectFromSource(bitmap, fakeVideo, detector, canvas, ctx)
-  return hit?.text ?? null
-}
-
-async function runLockedScan(
-  video: HTMLVideoElement,
-  detector: Detector,
-  canvas: HTMLCanvasElement,
-  ctx: CanvasRenderingContext2D,
-  cropLock: ScanBox | null,
-): Promise<{ hit: ScanHit | null; lock: ScanBox | null }> {
-  const vw = video.videoWidth || 1
-  const vh = video.videoHeight || 1
-  if (cropLock) {
-    const hit = await decodeCrop(video, padBox(cropLock, vw, vh, 0.2), detector, canvas, ctx)
-    return { hit, lock: cropLock }
-  }
-  const hit = await detectFromSource(video, video, detector, canvas, ctx)
-  const lock = hit?.box ? padBox(hit.box, vw, vh, 0.18) : null
-  return { hit, lock }
-}
-
-async function createDetector(): Promise<Detector> {
-  if (!("BarcodeDetector" in window)) return null
+  const worker = new Worker(new URL("./scan.worker.ts", import.meta.url), { type: "module" })
   try {
-    const formats = await BarcodeDetector.getSupportedFormats()
-    if (!formats.includes("qr_code")) return null
-    return new BarcodeDetector({ formats: ["qr_code"] })
-  } catch {
-    return null
-  }
-}
-
-async function detectFromSource(
-  source: CanvasImageSource,
-  size: { videoWidth: number; videoHeight: number },
-  detector: Detector,
-  canvas: HTMLCanvasElement,
-  ctx: CanvasRenderingContext2D,
-): Promise<ScanHit | null> {
-  const vw = size.videoWidth || 1
-  const vh = size.videoHeight || 1
-
-  const native = await detectNative(source, detector)
-  if (native) return native
-
-  const locateScale = Math.min(1, LOCATE_WIDTH / vw)
-  const lw = Math.max(1, Math.round(vw * locateScale))
-  const lh = Math.max(1, Math.round(vh * locateScale))
-  canvas.width = lw
-  canvas.height = lh
-  ctx.drawImage(source, 0, 0, lw, lh)
-  const preview = ctx.getImageData(0, 0, lw, lh)
-  const bright = findBrightRegion(preview)
-  const boxes: ScanBox[] = []
-  if (bright) {
-    boxes.push(scaleBox(bright, vw / lw, vh / lh))
-  }
-  boxes.push(centerBox(vw, vh, 0.5), centerBox(vw, vh, 0.32))
-
-  for (const box of boxes) {
-    const hit = await decodeCrop(source, box, detector, canvas, ctx)
-    if (hit) return hit
-  }
-
-  if (bright) return null
-  canvas.width = Math.max(1, Math.round(Math.min(vw, 960)))
-  canvas.height = Math.max(1, Math.round((canvas.width / vw) * vh))
-  ctx.drawImage(source, 0, 0, canvas.width, canvas.height)
-  return decodeCanvas(canvas, ctx, detector, vw / canvas.width, vh / canvas.height)
-}
-
-async function detectNative(
-  source: CanvasImageSource,
-  detector: Detector,
-): Promise<ScanHit | null> {
-  if (!detector) return null
-  try {
-    const codes = await detector.detect(source as ImageBitmapSource)
-    const code = codes[0]
-    if (!code?.rawValue) return null
-    return { text: code.rawValue, box: boxFromDetector(code) }
-  } catch {
-    return null
-  }
-}
-
-async function decodeCrop(
-  source: CanvasImageSource,
-  box: ScanBox,
-  detector: Detector,
-  canvas: HTMLCanvasElement,
-  ctx: CanvasRenderingContext2D,
-): Promise<ScanHit | null> {
-  const side = Math.max(32, Math.max(box.w, box.h))
-  const target = Math.max(ZOOM_TARGET, Math.round(side * 2))
-  canvas.width = target
-  canvas.height = target
-  ctx.imageSmoothingEnabled = true
-  ctx.imageSmoothingQuality = "high"
-  ctx.drawImage(source, box.x, box.y, box.w, box.h, 0, 0, target, target)
-  const hit = await decodeCanvas(canvas, ctx, detector, box.w / target, box.h / target)
-  if (!hit) return null
-  return {
-    text: hit.text,
-    box: hit.box
-      ? {
-          x: box.x + hit.box.x,
-          y: box.y + hit.box.y,
-          w: hit.box.w,
-          h: hit.box.h,
-        }
-      : box,
-  }
-}
-
-async function decodeCanvas(
-  canvas: HTMLCanvasElement,
-  ctx: CanvasRenderingContext2D,
-  detector: Detector,
-  scaleX: number,
-  scaleY: number,
-): Promise<ScanHit | null> {
-  if (detector) {
-    try {
-      const codes = await detector.detect(canvas)
-      const code = codes[0]
-      if (code?.rawValue) {
-        const box = boxFromDetector(code)
-        return {
-          text: code.rawValue,
-          box: box ? scaleBox(box, scaleX, scaleY) : undefined,
-        }
+    await waitReady(worker)
+    return await new Promise((resolve) => {
+      const onMessage = (event: MessageEvent<WorkerOut>) => {
+        if (event.data.type !== "result") return
+        worker.removeEventListener("message", onMessage)
+        resolve(event.data.hits.map((hit) => hit.text))
       }
-    } catch {
-      // jsQR fallback
-    }
+      worker.addEventListener("message", onMessage)
+      const message: WorkerIn = { type: "scan", id: 1, bitmap, lock: null }
+      worker.postMessage(message, [bitmap])
+    })
+  } finally {
+    worker.terminate()
   }
-  const image = ctx.getImageData(0, 0, canvas.width, canvas.height)
-  const result = jsQR(image.data, image.width, image.height, {
-    inversionAttempts: "attemptBoth",
+}
+
+function spawnWorker(onEngines?: (engines: ScanEngines) => void): Worker {
+  const worker = new Worker(new URL("./scan.worker.ts", import.meta.url), { type: "module" })
+  worker.addEventListener("message", (event: MessageEvent<WorkerOut>) => {
+    const data = event.data
+    if (data.type !== "ready" && data.type !== "engines") return
+    onEngines?.(enginesFrom(data))
   })
-  if (!result?.data) return null
+  worker.addEventListener("error", () => {
+    onEngines?.({ worker: false, zxing: false, barcodeDetector: false, settled: true })
+  })
+  return worker
+}
+
+function boxArea(box: ScanBox): number {
+  return box.w * box.h
+}
+
+function enginesFrom(data: Extract<WorkerOut, { type: "ready" | "engines" }>): ScanEngines {
   return {
-    text: result.data,
-    box: scaleBox(boxFromJsQr(result.location), scaleX, scaleY),
+    worker: true,
+    zxing: data.zxing,
+    barcodeDetector: data.barcodeDetector,
+    settled: data.type === "engines",
   }
 }
 
-function findBrightRegion(image: ImageData): ScanBox | null {
-  const { width, height, data } = image
-  for (const threshold of [225, 195, 165]) {
-    const box = brightBounds(data, width, height, threshold)
-    if (!box) continue
-    const area = box.w * box.h
-    if (area < 18 * 18) continue
-    if (area > width * height * 0.88) continue
-    const aspect = box.w / box.h
-    if (aspect < 0.42 || aspect > 2.4) continue
-    return padBox(box, width, height, 0.16)
-  }
-  return null
-}
-
-function brightBounds(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  threshold: number,
-): ScanBox | null {
-  let minX = width
-  let minY = height
-  let maxX = 0
-  let maxY = 0
-  let count = 0
-  for (let y = 0; y < height; y += 2) {
-    for (let x = 0; x < width; x += 2) {
-      const i = (y * width + x) * 4
-      const luma = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114
-      if (luma < threshold) continue
-      count += 1
-      if (x < minX) minX = x
-      if (y < minY) minY = y
-      if (x > maxX) maxX = x
-      if (y > maxY) maxY = y
+function waitReady(worker: Worker): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, 2000)
+    const onMessage = (event: MessageEvent<WorkerOut>) => {
+      if (event.data.type !== "ready") return
+      clearTimeout(timer)
+      worker.removeEventListener("message", onMessage)
+      resolve()
     }
+    worker.addEventListener("message", onMessage)
+  })
+}
+
+type CameraCaps = MediaTrackCapabilities & {
+  focusMode?: string[]
+  exposureMode?: string[]
+  whiteBalanceMode?: string[]
+}
+
+async function tuneCamera(stream: MediaStream): Promise<void> {
+  const track = stream.getVideoTracks()[0]
+  if (!track?.getCapabilities) return
+  const caps = track.getCapabilities() as CameraCaps
+  const advanced: Record<string, string> = {}
+  if (caps.focusMode?.includes("continuous")) advanced.focusMode = "continuous"
+  else if (caps.focusMode?.includes("auto")) advanced.focusMode = "auto"
+  if (caps.exposureMode?.includes("continuous")) advanced.exposureMode = "continuous"
+  if (caps.whiteBalanceMode?.includes("continuous")) advanced.whiteBalanceMode = "continuous"
+  try {
+    await track.applyConstraints({
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30 },
+      ...(Object.keys(advanced).length > 0 ? { advanced: [advanced] } : {}),
+    })
+  } catch {
+    // Some browsers reject individual advanced keys.
   }
-  if (count < 30) return null
-  return { x: minX, y: minY, w: Math.max(1, maxX - minX), h: Math.max(1, maxY - minY) }
-}
-
-function padBox(box: ScanBox, width: number, height: number, padFrac: number): ScanBox {
-  const pad = Math.round(Math.max(box.w, box.h) * padFrac)
-  const x = Math.max(0, box.x - pad)
-  const y = Math.max(0, box.y - pad)
-  const r = Math.min(width, box.x + box.w + pad)
-  const b = Math.min(height, box.y + box.h + pad)
-  return { x, y, w: Math.max(1, r - x), h: Math.max(1, b - y) }
-}
-
-function centerBox(width: number, height: number, frac: number): ScanBox {
-  const side = Math.max(32, Math.round(Math.min(width, height) * frac))
-  return {
-    x: Math.max(0, Math.round((width - side) / 2)),
-    y: Math.max(0, Math.round((height - side) / 2)),
-    w: Math.min(side, width),
-    h: Math.min(side, height),
-  }
-}
-
-function scaleBox(box: ScanBox, scaleX: number, scaleY: number): ScanBox {
-  return {
-    x: box.x * scaleX,
-    y: box.y * scaleY,
-    w: box.w * scaleX,
-    h: box.h * scaleY,
-  }
-}
-
-function boxFromDetector(code: DetectedBarcode): ScanBox | undefined {
-  const bb = code.boundingBox
-  if (!bb) return undefined
-  return { x: bb.x, y: bb.y, w: bb.width, h: bb.height }
-}
-
-function boxFromJsQr(location: {
-  topLeftCorner: { x: number; y: number }
-  topRightCorner: { x: number; y: number }
-  bottomLeftCorner: { x: number; y: number }
-  bottomRightCorner: { x: number; y: number }
-}): ScanBox {
-  const xs = [
-    location.topLeftCorner.x,
-    location.topRightCorner.x,
-    location.bottomLeftCorner.x,
-    location.bottomRightCorner.x,
-  ]
-  const ys = [
-    location.topLeftCorner.y,
-    location.topRightCorner.y,
-    location.bottomLeftCorner.y,
-    location.bottomRightCorner.y,
-  ]
-  const x = Math.min(...xs)
-  const y = Math.min(...ys)
-  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y }
 }

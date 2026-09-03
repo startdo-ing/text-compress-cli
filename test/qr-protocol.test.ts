@@ -16,7 +16,7 @@ import {
   SessionAssembler,
   sha256Hex,
 } from "../src/qr/protocol.js"
-import { renderQr } from "../src/qr/render.js"
+import { renderQr, renderQrGrid } from "../src/qr/render.js"
 
 describe("TCQR protocol", () => {
   it("round-trips a payload from a sequential lap", async () => {
@@ -173,6 +173,17 @@ describe("QR terminal render", () => {
     expect(small.split("\n").length).toBe(large.split("\n").length)
   })
 
+  it("paints four equal-height QRs in a 2×2 grid", () => {
+    const grid = renderQrGrid(["a", "b", "c", "d"], "M", 5)
+    const single = renderQr("a", "M", 5)
+    const lines = grid.split("\n")
+    expect(lines.length).toBeGreaterThan(single.split("\n").length)
+    for (const line of lines) {
+      expect(line.endsWith("\x1b[K")).toBe(true)
+    }
+    expect(grid.split("\x1b[48;5;231m").length - 1).toBeGreaterThanOrEqual(4)
+  })
+
   it("erases the TTY between frames so leftover rows cannot accumulate", async () => {
     const { PassThrough } = await import("node:stream")
     const chunks: string[] = []
@@ -216,13 +227,12 @@ describe("QR capacity", () => {
     expect(versionForTerminal({ columns: 80, rows: 24 })).toBeGreaterThanOrEqual(5)
   })
 
-  it("sizes chunks so header, data, and parity fit one QR version", () => {
-    const size = { columns: 80, rows: 24 }
+  it("sizes chunks so header, data, and parity fit the 2×2 terminal version", () => {
+    const size = { columns: 160, rows: 50 }
     const chunk = recommendChunkSize(size, "M")
     const maxFrame = estimatedMaxFrameBytes(chunk)
     const version = versionForByteCount(maxFrame, "M")
     expect(chunk).toBeGreaterThanOrEqual(1)
     expect(qrByteCapacity(version, "M")).toBeGreaterThanOrEqual(maxFrame)
-    expect(version).toBeGreaterThanOrEqual(versionForTerminal(size))
   })
 })

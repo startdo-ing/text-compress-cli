@@ -74,9 +74,10 @@ text-compress --decompress ./plain.md
 
 ### QR send (optical transfer)
 
-Compress, then loop QR frames in the terminal. A phone camera running
-`web-receiver` assembles the payload. Frames are shuffled per lap and
-carry XOR parity, so dropped camera frames do not stall the transfer.
+Compress, then loop a 2×2 QR grid in the terminal (four frames per tick).
+A phone camera running `web-receiver` reads every code in view. Frames are
+shuffled per lap and carry XOR parity, so dropped camera frames do not stall
+the transfer.
 
 ```bash
 text-compress send ./notes.md

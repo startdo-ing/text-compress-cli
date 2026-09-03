@@ -37,6 +37,7 @@ export async function runSend(args: Args): Promise<void> {
       Chunks: formatCount(header.chunkCount),
       "Chunk size": `${header.chunkSize} chars`,
       "Frames / lap": formatCount(firstLap.length),
+      Layout: "2×2 (4 QR)",
       Session: header.sessionId,
       "SHA-256": `${header.sha256.slice(0, 16)}…`,
       ECC: ec,
@@ -55,17 +56,19 @@ export async function runSend(args: Args): Promise<void> {
   }
 
   process.stderr.write(
-    "\nOpen web-receiver, allow the camera, and point it at this QR. q or Ctrl+C stops.\nSpace pauses. + / - changes speed.\n\n",
+    "\nOpen web-receiver, allow the camera, and point it at the 2×2 QR grid. q or Ctrl+C stops.\nSpace pauses. + / - changes speed.\n\n",
   )
 
   await playQrLoop(transfer, {
     fps,
     ec,
-    statusLine: ({ lap, frame, total, paused, fps: currentFps }) =>
-      [
-        `${name}  ${frame}/${total}  lap ${lap + 1}  ${currentFps} fps${paused ? "  paused" : ""}`,
+    statusLine: ({ lap, frame, shown, total, paused, fps: currentFps }) => {
+      const last = Math.min(frame + shown - 1, total)
+      return [
+        `${name}  ${frame}–${last}/${total}  4-up  lap ${lap + 1}  ${currentFps} fps${paused ? "  paused" : ""}`,
         `session ${header.sessionId}  ${header.chunkCount} chunks  q quit  space pause  +/- speed`,
-      ].join("\n"),
+      ].join("\n")
+    },
   })
 }
 

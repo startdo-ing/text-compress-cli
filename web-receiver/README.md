@@ -16,11 +16,11 @@ Then, from the repo root:
 npx tsx src/cli.ts send ./README.md --fps 8
 ```
 
-Point the camera at the terminal QR. The chunk mosaic fills in as frames arrive. Missed frames are expected — the sender loops, shuffles each lap, and includes XOR parity.
+Point the camera at the 2×2 QR grid in the terminal. The chunk mosaic fills in as frames arrive. Missed frames are expected — the sender loops four codes at a time, shuffles each lap, and includes XOR parity.
 
 ## Photo fallback
 
-If the camera is blocked, use **Use a photo** and shoot the terminal QR. Repeat as frames change.
+If the camera is blocked, use **Use a photo** and shoot the terminal QR grid. Repeat as frames change.
 
 ## Build
 

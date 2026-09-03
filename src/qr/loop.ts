@@ -1,13 +1,13 @@
 /**
  * @module qr/loop
  *
- * Play a {@link Transfer} as a looping QR carousel on stdout.
+ * Play a {@link Transfer} as a looping 2×2 QR grid on stdout.
  */
 
 import { lockedQrVersion } from "./capacity.js"
 import type { ErrorCorrection, Transfer } from "./protocol.js"
 import { framesForLap } from "./protocol.js"
-import { renderQr } from "./render.js"
+import { QR_TILES, renderQrGrid } from "./render.js"
 
 export interface LoopOptions {
   fps: number
@@ -19,6 +19,7 @@ export interface LoopOptions {
   statusLine: (info: {
     lap: number
     frame: number
+    shown: number
     total: number
     paused: boolean
     fps: number
@@ -88,11 +89,16 @@ export async function playQrLoop(transfer: Transfer, options: LoopOptions): Prom
     while (!aborted) {
       if (options.laps !== undefined && lap >= options.laps) break
       if (!paused) {
-        const text = frames[frameIndex]
-        const qr = renderQr(text, options.ec, qrVersion)
+        const shown = Math.min(QR_TILES, frames.length)
+        const texts = Array.from(
+          { length: shown },
+          (_, i) => frames[(frameIndex + i) % frames.length],
+        )
+        const qr = renderQrGrid(texts, options.ec, qrVersion)
         const status = options.statusLine({
           lap,
           frame: frameIndex + 1,
+          shown,
           total: frames.length,
           paused,
           fps,
@@ -106,7 +112,7 @@ export async function playQrLoop(transfer: Transfer, options: LoopOptions): Prom
         } else {
           stdout.write(`${qr}\n\n${status}\n`)
         }
-        frameIndex += 1
+        frameIndex += shown
         if (frameIndex >= frames.length) {
           frameIndex = 0
           lap += 1

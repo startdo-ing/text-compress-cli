@@ -77,14 +77,39 @@ export function lockedQrVersion(frames: Iterable<string>, ec: ErrorCorrection): 
 
 /**
  * Largest QR version whose symbol (plus quiet zone) fits in the terminal
- * when drawn with half-blocks.
+ * when drawn with half-blocks as a single code.
  */
 export function versionForTerminal(size: TerminalSize, quietZone = 2): number {
-  const maxWidth = Math.max(21, size.columns - 2)
-  const maxHeight = Math.max(21, (size.rows - 7) * 2)
-  const maxModules = Math.min(maxWidth, maxHeight) - quietZone * 2
+  return versionForCell(size.columns - 2, (size.rows - 7) * 2, quietZone, 5)
+}
+
+/**
+ * Largest QR version that fits one cell of a 2×2 terminal grid
+ * (gap + status line reserved).
+ */
+export function versionForTerminalGrid(
+  size: TerminalSize,
+  cols = 2,
+  rows = 2,
+  quietZone = 2,
+): number {
+  const statusRows = 3
+  const gapCols = 2
+  const gapRows = 1
+  const cellCols = Math.floor((size.columns - gapCols * (cols - 1)) / cols)
+  const cellRows = Math.floor((size.rows - statusRows - gapRows * (rows - 1)) / rows)
+  return versionForCell(cellCols, cellRows * 2, quietZone, 1)
+}
+
+function versionForCell(
+  maxWidth: number,
+  maxHeight: number,
+  quietZone: number,
+  minVersion: number,
+): number {
+  const maxModules = Math.min(Math.max(21, maxWidth), Math.max(21, maxHeight)) - quietZone * 2
   const version = Math.floor((maxModules - 21) / 4) + 1
-  return Math.min(25, Math.max(5, version))
+  return Math.min(25, Math.max(minVersion, version))
 }
 
 /**
@@ -125,7 +150,8 @@ export function recommendChunkSize(
   ec: ErrorCorrection = "M",
   name = "payload.txt",
 ): number {
-  const termVersion = !size || size.columns < 40 || size.rows < 16 ? 10 : versionForTerminal(size)
+  const termVersion =
+    !size || size.columns < 40 || size.rows < 16 ? 6 : versionForTerminalGrid(size)
   const headerVersion = versionForByteCount(estimatedHeaderBytes(name), ec)
   const version = Math.max(termVersion, headerVersion)
   return chunkSizeForCapacity(qrByteCapacity(version, ec), name)

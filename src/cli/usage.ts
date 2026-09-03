@@ -44,7 +44,7 @@ Options:
                                  preserves text verbatim (e.g. a code block)
   -p, --password <string>  Password-protect on compress, or unlock on decompress
   --fps <1-24>             QR send frame rate (default: 8)
-  --chunk-size <chars>     QR send payload chars per frame (default: fits terminal)
+	--chunk-size <chars>     QR send payload chars per frame (default: fits 2×2 terminal grid)
   --ec <L|M|Q|H>           QR error correction (default: M)
   --raw                    QR send the file as-is, without compressing
   --dump                   Print one lap of QR frame text instead of animating

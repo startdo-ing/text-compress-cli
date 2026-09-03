@@ -29,7 +29,8 @@
     "test": "vitest run",
     "pretest": "npm run build",
     "test:watch": "vitest",
-    "receiver": "npm run dev --prefix web-receiver -- --host",
+    "receiver": "npm run dev --prefix web-receiver",
+    "receiver:https": "npm run dev:https --prefix web-receiver",
     "prepublishOnly": "npm run build",
     "validate:skills": "intent validate",
     "prepare": "husky"

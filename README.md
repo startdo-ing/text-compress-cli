@@ -101,7 +101,7 @@ npm run dev -- ./notes.txt -p "secret"
 
 ## QR send
 
-Air-gap a compressed payload from a terminal to a phone (or any device with a camera). The sender loops QR frames; the receiver assembles them even when the camera drops frames.
+Air-gap a compressed payload from a terminal to a phone (or any device with a camera). The sender paints a **2×2 grid of QR codes** each tick (four frames at once); the receiver reads every code in the camera frame and assembles them even when some drop.
 
 The protocol is **not** a one-shot slideshow:
 
@@ -131,7 +131,7 @@ npm run dev            # same computer
 npm run dev:https      # phone on the LAN (accept the cert warning)
 ```
 
-Open the shown URL, allow the camera, and point it at the terminal. A phone on the LAN needs `dev:https` (self-signed cert). `localhost` on this computer works over HTTP.
+Open the shown URL, allow the camera, and point it at the 2×2 QR grid in the terminal. A phone on the LAN needs `dev:https` (self-signed cert). `localhost` on this computer works over HTTP.
 
 Keys while sending: `q` or Ctrl+C stop, space pause, `+` / `-` change speed.
 
