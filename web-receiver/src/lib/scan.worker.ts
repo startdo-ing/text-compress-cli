@@ -3,20 +3,30 @@
 import jsQR from "jsqr"
 import { prepareZXingModule, readBarcodes, type ReaderOptions } from "zxing-wasm/reader"
 import wasmUrl from "zxing-wasm/reader/zxing_reader.wasm?url"
-import type { ScanBox, ScanHit, WorkerIn, WorkerOut } from "./scan-types"
+import {
+  centerBox,
+  gridLock,
+  padBox,
+  scaleBox,
+  splitQuadrants,
+  type ScanBox,
+} from "./scan-geometry"
+import type { ScanHit, WorkerIn, WorkerOut } from "./scan-types"
 
-const ZOOM_TARGET = 1100
-const LOCATE_WIDTH = 480
-const MAX_SYMBOLS = 8
+const DECODE_MAX = 880
+const LOCATE_WIDTH = 400
+const MAX_SYMBOLS = 4
 
 type Detector = BarcodeDetector | null
 
 let detector: Detector = null
 let zxingReady = false
+let workCanvas: OffscreenCanvas | null = null
+let workCtx: OffscreenCanvasRenderingContext2D | null = null
 
 const zxingFast: ReaderOptions = {
   formats: ["QRCode"],
-  tryHarder: true,
+  tryHarder: false,
   tryInvert: true,
   tryRotate: false,
   tryDownscale: true,
@@ -26,6 +36,7 @@ const zxingFast: ReaderOptions = {
 
 const zxingTough: ReaderOptions = {
   ...zxingFast,
+  tryHarder: true,
   binarizer: "GlobalHistogram",
   tryDenoise: true,
 }
@@ -83,43 +94,104 @@ async function scanFrame(
   const vw = bitmap.width || 1
   const vh = bitmap.height || 1
   if (cropLock) {
-    const tight = await decodeCrop(bitmap, padBox(cropLock, vw, vh, 0.1), "fast")
-    if (tight.length >= 2) return { hits: tight, lock: cropLock }
-    const wide = await decodeCrop(bitmap, padBox(cropLock, vw, vh, 0.28), "hard")
-    if (wide.length > 0) return { hits: wide, lock: cropLock }
-    const parts: ScanHit[] = []
-    for (const cell of splitQuadrants(cropLock, vw, vh)) {
-      parts.push(...(await decodeCrop(bitmap, cell, "fast")))
-    }
-    return { hits: dedupeHits(parts), lock: cropLock }
+    return scanLocked(bitmap, cropLock, vw, vh)
   }
-
-  const native = await detectNative(bitmap)
-  if (native.length > 0) {
-    return { hits: native, lock: unionLock(native, vw, vh) }
-  }
-
-  const hits = await detectFromBitmap(bitmap)
-  return { hits, lock: unionLock(hits, vw, vh) }
+  return scanSearch(bitmap, vw, vh)
 }
 
-async function detectFromBitmap(bitmap: ImageBitmap): Promise<ScanHit[]> {
-  const vw = bitmap.width || 1
-  const vh = bitmap.height || 1
+async function scanLocked(
+  bitmap: ImageBitmap,
+  cropLock: ScanBox,
+  vw: number,
+  vh: number,
+): Promise<{ hits: ScanHit[]; lock: ScanBox | null }> {
+  let hits = await decodeCrop(bitmap, padBox(cropLock, vw, vh, 0.04), "fast")
+  if (hits.length < 4) {
+    const guess = gridLock(hitBoxes(hits), vw, vh, cropLock) ?? cropLock
+    hits = dedupeHits([...hits, ...(await decodeQuadrants(bitmap, guess, vw, vh))])
+  }
+  if (hits.length === 0) {
+    hits = await decodeCrop(bitmap, padBox(cropLock, vw, vh, 0.28), "fast")
+    if (hits.length > 0 && hits.length < 4) {
+      const guess = gridLock(hitBoxes(hits), vw, vh, cropLock) ?? cropLock
+      hits = dedupeHits([...hits, ...(await decodeQuadrants(bitmap, guess, vw, vh))])
+    }
+  }
+  if (hits.length === 0) {
+    hits = await decodeCrop(bitmap, padBox(cropLock, vw, vh, 0.12), "hard")
+  }
+  return {
+    hits,
+    lock: gridLock(hitBoxes(hits), vw, vh, cropLock) ?? cropLock,
+  }
+}
+
+async function scanSearch(
+  bitmap: ImageBitmap,
+  vw: number,
+  vh: number,
+): Promise<{ hits: ScanHit[]; lock: ScanBox | null }> {
   const locateScale = Math.min(1, LOCATE_WIDTH / vw)
   const lw = Math.max(1, Math.round(vw * locateScale))
   const lh = Math.max(1, Math.round(vh * locateScale))
   const preview = drawToImage(bitmap, 0, 0, vw, vh, lw, lh)
   const region = findQrRegion(preview)
+  const hint = region ? scaleBox(region, vw / lw, vh / lh) : null
+
   const boxes: ScanBox[] = []
-  if (region) boxes.push(scaleBox(region, vw / lw, vh / lh))
+  if (hint) boxes.push(hint)
   boxes.push(centerBox(vw, vh, 0.62), centerBox(vw, vh, 0.4))
 
-  for (let i = 0; i < boxes.length; i += 1) {
-    const hits = await decodeCrop(bitmap, boxes[i], i === boxes.length - 1 ? "hard" : "fast")
-    if (hits.length > 0) return hits
+  let best: ScanHit[] = []
+  for (const box of boxes) {
+    const hits = await decodeCrop(bitmap, box, "fast")
+    if (hits.length > best.length) best = hits
+    if (best.length >= 4) break
   }
-  return []
+
+  if (best.length > 0 && best.length < 4) {
+    const guess = gridLock(hitBoxes(best), vw, vh, hint)
+    if (guess) {
+      best = dedupeHits([...best, ...(await decodeQuadrants(bitmap, guess, vw, vh))])
+    }
+  }
+
+  if (best.length === 0 && boxes[0]) {
+    best = await decodeCrop(bitmap, boxes[0], "hard")
+  }
+
+  return {
+    hits: best,
+    lock: best.length > 0 ? gridLock(hitBoxes(best), vw, vh, hint) : null,
+  }
+}
+
+async function decodeQuadrants(
+  bitmap: ImageBitmap,
+  box: ScanBox,
+  vw: number,
+  vh: number,
+): Promise<ScanHit[]> {
+  const jobs = splitQuadrants(box, vw, vh).map((cell) => {
+    const { dw, dh } = targetSize(cell)
+    return {
+      cell,
+      image: drawToImage(bitmap, cell.x, cell.y, cell.w, cell.h, dw, dh),
+      scaleX: cell.w / dw,
+      scaleY: cell.h / dh,
+    }
+  })
+  const decoded = await Promise.all(
+    jobs.map((job) => decodeImage(job.image, job.scaleX, job.scaleY, "fast")),
+  )
+  const hits: ScanHit[] = []
+  for (let i = 0; i < jobs.length; i += 1) {
+    const cell = jobs[i].cell
+    for (const hit of decoded[i]) {
+      hits.push(offsetHit(hit, cell))
+    }
+  }
+  return dedupeHits(hits)
 }
 
 async function decodeCrop(
@@ -127,11 +199,23 @@ async function decodeCrop(
   box: ScanBox,
   effort: "fast" | "hard",
 ): Promise<ScanHit[]> {
-  const side = Math.max(32, Math.max(box.w, box.h))
-  const target = Math.min(1400, Math.max(ZOOM_TARGET, Math.round(side * 1.4)))
-  const image = drawToImage(bitmap, box.x, box.y, box.w, box.h, target, target)
-  const hits = await decodeImage(image, box.w / target, box.h / target, effort)
-  return hits.map((hit) => ({
+  const { dw, dh } = targetSize(box)
+  const image = drawToImage(bitmap, box.x, box.y, box.w, box.h, dw, dh)
+  const hits = await decodeImage(image, box.w / dw, box.h / dh, effort)
+  return hits.map((hit) => offsetHit(hit, box))
+}
+
+function targetSize(box: ScanBox): { dw: number; dh: number } {
+  const long = Math.max(box.w, box.h, 1)
+  const scale = DECODE_MAX / long
+  return {
+    dw: Math.max(32, Math.round(box.w * scale)),
+    dh: Math.max(32, Math.round(box.h * scale)),
+  }
+}
+
+function offsetHit(hit: ScanHit, box: ScanBox): ScanHit {
+  return {
     text: hit.text,
     box: hit.box
       ? {
@@ -141,7 +225,7 @@ async function decodeCrop(
           h: hit.box.h,
         }
       : box,
-  }))
+  }
 }
 
 async function decodeImage(
@@ -151,28 +235,28 @@ async function decodeImage(
   effort: "fast" | "hard",
 ): Promise<ScanHit[]> {
   const native = scaleHits(await detectNative(image), scaleX, scaleY)
-  if (native.length >= 2) return native
+  if (native.length >= 4) return native
 
   const zxing = scaleHits(await decodeZxing(image, zxingFast), scaleX, scaleY)
   const merged = dedupeHits([...native, ...zxing])
-  if (merged.length >= 2) return merged
-
-  const stretched = stretchContrast(image)
-  const zxingContrast = scaleHits(await decodeZxing(stretched, zxingFast), scaleX, scaleY)
-  const afterContrast = dedupeHits([...merged, ...zxingContrast])
-  if (afterContrast.length > 0 && (effort === "fast" || afterContrast.length >= 2)) {
-    return afterContrast
-  }
+  if (merged.length >= 4 || (effort === "fast" && merged.length > 0)) return merged
 
   if (effort === "hard") {
+    const stretched = stretchContrast(image)
+    const zxingContrast = scaleHits(await decodeZxing(stretched, zxingFast), scaleX, scaleY)
+    const afterContrast = dedupeHits([...merged, ...zxingContrast])
+    if (afterContrast.length >= 2) return afterContrast
+
     const tough = scaleHits(await decodeZxing(image, zxingTough), scaleX, scaleY)
     const all = dedupeHits([...afterContrast, ...tough])
     if (all.length > 0) return all
+
+    const js = decodeJsQr(image) ?? decodeJsQr(stretched)
+    if (js) return [scaleHit(js, scaleX, scaleY)]
+    return afterContrast
   }
 
-  const js = decodeJsQr(image) ?? decodeJsQr(stretched)
-  if (js) return [scaleHit(js, scaleX, scaleY)]
-  return afterContrast
+  return merged
 }
 
 async function decodeZxing(image: ImageData, options: ReaderOptions): Promise<ScanHit[]> {
@@ -227,13 +311,25 @@ function drawToImage(
   dw: number,
   dh: number,
 ): ImageData {
-  const canvas = new OffscreenCanvas(dw, dh)
-  const ctx = canvas.getContext("2d", { willReadFrequently: true })
+  const ctx = getCtx(dw, dh)
   if (!ctx) return new ImageData(dw, dh)
   ctx.imageSmoothingEnabled = true
-  ctx.imageSmoothingQuality = "high"
+  ctx.imageSmoothingQuality = "medium"
   ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, dw, dh)
   return ctx.getImageData(0, 0, dw, dh)
+}
+
+function getCtx(dw: number, dh: number): OffscreenCanvasRenderingContext2D | null {
+  if (!workCanvas || !workCtx) {
+    workCanvas = new OffscreenCanvas(dw, dh)
+    workCtx = workCanvas.getContext("2d", { willReadFrequently: true })
+    return workCtx
+  }
+  if (workCanvas.width !== dw || workCanvas.height !== dh) {
+    workCanvas.width = dw
+    workCanvas.height = dh
+  }
+  return workCtx
 }
 
 function stretchContrast(src: ImageData): ImageData {
@@ -278,8 +374,27 @@ function findContrastRegion(image: ImageData): ScanBox | null {
       if (score > maxScore) maxScore = score
     }
   }
-  if (maxScore < 180) return null
-  const cutoff = maxScore * 0.38
+  if (maxScore < 140) return null
+  const cutoff = maxScore * 0.22
+  const neighbor = maxScore * 0.12
+  const hot: boolean[] = scores.map((score) => score >= cutoff)
+  const marked = hot.slice()
+  for (let gy = 0; gy < rows; gy += 1) {
+    for (let gx = 0; gx < cols; gx += 1) {
+      if (!hot[gy * cols + gx]) continue
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const) {
+        const x = gx + dx
+        const y = gy + dy
+        if (x < 0 || x >= cols || y < 0 || y >= rows) continue
+        if (scores[y * cols + x] >= neighbor) marked[y * cols + x] = true
+      }
+    }
+  }
   let minX = cols
   let minY = rows
   let maxX = 0
@@ -287,7 +402,7 @@ function findContrastRegion(image: ImageData): ScanBox | null {
   let count = 0
   for (let gy = 0; gy < rows; gy += 1) {
     for (let gx = 0; gx < cols; gx += 1) {
-      if (scores[gy * cols + gx] < cutoff) continue
+      if (!marked[gy * cols + gx]) continue
       count += 1
       if (gx < minX) minX = gx
       if (gy < minY) minY = gy
@@ -378,32 +493,8 @@ function brightBounds(
   return { x: minX, y: minY, w: Math.max(1, maxX - minX), h: Math.max(1, maxY - minY) }
 }
 
-function padBox(box: ScanBox, width: number, height: number, padFrac: number): ScanBox {
-  const pad = Math.round(Math.max(box.w, box.h) * padFrac)
-  const x = Math.max(0, box.x - pad)
-  const y = Math.max(0, box.y - pad)
-  const r = Math.min(width, box.x + box.w + pad)
-  const b = Math.min(height, box.y + box.h + pad)
-  return { x, y, w: Math.max(1, r - x), h: Math.max(1, b - y) }
-}
-
-function centerBox(width: number, height: number, frac: number): ScanBox {
-  const side = Math.max(32, Math.round(Math.min(width, height) * frac))
-  return {
-    x: Math.max(0, Math.round((width - side) / 2)),
-    y: Math.max(0, Math.round((height - side) / 2)),
-    w: Math.min(side, width),
-    h: Math.min(side, height),
-  }
-}
-
-function scaleBox(box: ScanBox, scaleX: number, scaleY: number): ScanBox {
-  return {
-    x: box.x * scaleX,
-    y: box.y * scaleY,
-    w: box.w * scaleX,
-    h: box.h * scaleY,
-  }
+function hitBoxes(hits: ScanHit[]): ScanBox[] {
+  return hits.map((hit) => hit.box).filter((box): box is ScanBox => Boolean(box))
 }
 
 function scaleHit(hit: ScanHit, scaleX: number, scaleY: number): ScanHit {
@@ -426,49 +517,6 @@ function dedupeHits(hits: ScanHit[]): ScanHit[] {
     out.push(hit)
   }
   return out
-}
-
-function unionLock(hits: ScanHit[], width: number, height: number): ScanBox | null {
-  const boxes = hits.map((hit) => hit.box).filter((box): box is ScanBox => Boolean(box))
-  if (boxes.length === 0) return null
-  return padBox(unionBoxes(boxes), width, height, boxes.length >= 2 ? 0.1 : 0.18)
-}
-
-function unionBoxes(boxes: ScanBox[]): ScanBox {
-  let x1 = Number.POSITIVE_INFINITY
-  let y1 = Number.POSITIVE_INFINITY
-  let x2 = 0
-  let y2 = 0
-  for (const box of boxes) {
-    x1 = Math.min(x1, box.x)
-    y1 = Math.min(y1, box.y)
-    x2 = Math.max(x2, box.x + box.w)
-    y2 = Math.max(y2, box.y + box.h)
-  }
-  return { x: x1, y: y1, w: Math.max(1, x2 - x1), h: Math.max(1, y2 - y1) }
-}
-
-function splitQuadrants(box: ScanBox, width: number, height: number): ScanBox[] {
-  const overlap = Math.round(Math.min(box.w, box.h) * 0.08)
-  const midX = box.x + box.w / 2
-  const midY = box.y + box.h / 2
-  const cells = [
-    { x: box.x, y: box.y, w: midX - box.x + overlap, h: midY - box.y + overlap },
-    { x: midX - overlap, y: box.y, w: box.x + box.w - midX + overlap, h: midY - box.y + overlap },
-    { x: box.x, y: midY - overlap, w: midX - box.x + overlap, h: box.y + box.h - midY + overlap },
-    {
-      x: midX - overlap,
-      y: midY - overlap,
-      w: box.x + box.w - midX + overlap,
-      h: box.y + box.h - midY + overlap,
-    },
-  ]
-  return cells.map((cell) => ({
-    x: Math.max(0, cell.x),
-    y: Math.max(0, cell.y),
-    w: Math.max(1, Math.min(width, cell.x + cell.w) - Math.max(0, cell.x)),
-    h: Math.max(1, Math.min(height, cell.y + cell.h) - Math.max(0, cell.y)),
-  }))
 }
 
 function boxFromDetector(code: DetectedBarcode): ScanBox | undefined {

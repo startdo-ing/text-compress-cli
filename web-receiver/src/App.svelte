@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { parseFrame, SessionAssembler } from "../../src/qr/protocol"
+	import { coverOrigin } from "./lib/scan-geometry"
 	import {
 		scanImageFile,
 		startCamera,
@@ -236,29 +237,6 @@
 		return () => {
 			if (videoEl === node) videoEl = null
 		}
-	}
-
-	function coverOrigin(
-		box: ScanBox | null,
-		vw: number,
-		vh: number,
-		elw: number,
-		elh: number,
-		live: boolean,
-	): { ox: number; oy: number; zoom: number } {
-		if (!live || !box || vw < 1 || vh < 1 || elw < 1 || elh < 1) {
-			return { ox: 50, oy: 50, zoom: 1 }
-		}
-		const s = Math.max(elw / vw, elh / vh)
-		const dispW = vw * s
-		const dispH = vh * s
-		const offX = (elw - dispW) / 2
-		const offY = (elh - dispH) / 2
-		const cx = offX + (box.x + box.w / 2) * s
-		const cy = offY + (box.y + box.h / 2) * s
-		const frac = Math.max(box.w / vw, box.h / vh)
-		const zoom = Math.min(2.2, Math.max(1.05, 0.92 / Math.max(frac, 0.12)))
-		return { ox: (cx / elw) * 100, oy: (cy / elh) * 100, zoom }
 	}
 </script>
 
@@ -519,7 +497,11 @@
 	.camera {
 		transform: scale(var(--zoom));
 		transform-origin: var(--ox) var(--oy);
-		transition: transform 0.45s cubic-bezier(0.2, 0, 0, 1);
+		transition: transform 0.28s cubic-bezier(0.2, 0, 0, 1);
+	}
+
+	.camera:not(.off) {
+		will-change: transform;
 	}
 
 	.camera.off {

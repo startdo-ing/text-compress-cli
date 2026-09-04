@@ -1,4 +1,6 @@
-export type ScanBox = { x: number; y: number; w: number; h: number }
+import type { ScanBox } from "./scan-geometry"
+
+export type { ScanBox }
 export type ScanHit = { text: string; box?: ScanBox }
 
 export type WorkerIn = {
