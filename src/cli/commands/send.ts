@@ -5,6 +5,7 @@
  */
 
 import { basename, extname } from "node:path"
+import { compressFile } from "../../api/file.js"
 import { compressFolder } from "../../api/folder.js"
 import { compress } from "../../api/text.js"
 import { readTerminalSize, recommendChunkSize } from "../../qr/capacity.js"
@@ -12,7 +13,13 @@ import { playQrLoop } from "../../qr/loop.js"
 import { createTransfer, framesForLap, type PayloadKind } from "../../qr/protocol.js"
 import { readSplitInput } from "../../split/parts.js"
 import { formatBytes, formatCount, printRunSummary } from "../analytics.js"
-import { type Args, readInput, resolveEncoding, resolveEncodingOptional } from "../args.js"
+import {
+  type Args,
+  readInput,
+  readInputBuffer,
+  resolveEncoding,
+  resolveEncodingOptional,
+} from "../args.js"
 import { detectCompressedPayload } from "../detect.js"
 
 const DEFAULT_FPS = 8
@@ -117,7 +124,7 @@ function preparePayload(args: Args): {
               : undefined,
       }
     }
-    const encoded = compress(content, encoding, args.password)
+    const encoded = compressFile(readInputBuffer(args), encoding, args.password)
     const base = basename(args.file, extname(args.file))
     return { payload: encoded, name: `${base}.txt`, kind: "compressed" }
   }

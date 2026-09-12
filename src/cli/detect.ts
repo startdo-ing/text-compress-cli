@@ -7,7 +7,7 @@
 import { brotliDecompressSync } from "node:zlib"
 import { decryptBuffer, isEncrypted } from "../crypto/password.js"
 import { decodeBuffer } from "../encoding/index.js"
-import { decompressPayload, TAG_FOLDER, TAG_TEXT } from "../payload/tags.js"
+import { decompressPayload, TAG_FILE, TAG_FOLDER, TAG_TEXT } from "../payload/tags.js"
 import type { Encoding } from "../types.js"
 
 export type DetectResult = "compressed" | "not-compressed" | "password-required"
@@ -54,7 +54,7 @@ export function detectCompressedPayload(
     try {
       const raw = brotliDecompressSync(decoded)
       const tag = raw[0]
-      if (tag === TAG_TEXT || tag === TAG_FOLDER) {
+      if (tag === TAG_TEXT || tag === TAG_FOLDER || tag === TAG_FILE) {
         return "compressed"
       }
     } catch {}
@@ -88,7 +88,7 @@ export function resolveDetectedEncoding(
 /** Validate using the full decompress path (used when forcing decompress). */
 export function assertDecompressible(encoded: string, encoding: Encoding, password?: string): void {
   const { tag } = decompressPayload(encoded.trim(), encoding, password)
-  if (tag !== TAG_TEXT && tag !== TAG_FOLDER) {
+  if (tag !== TAG_TEXT && tag !== TAG_FOLDER && tag !== TAG_FILE) {
     throw new Error(`Corrupt or unrecognized payload (tag 0x${tag.toString(16)}).`)
   }
 }

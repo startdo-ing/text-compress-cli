@@ -6,8 +6,10 @@ import {
   AUTO_SPLIT_CHARS,
   assertDirectory,
   compress,
+  compressFile,
   compressFolder,
   decompress,
+  decompressFile,
   decompressPayload,
   decompressToPath,
   extractFilenamePrefix,
@@ -20,6 +22,7 @@ import {
   SPLIT_MAGIC,
   splitEncodedIntoWrappedParts,
   splitString,
+  TAG_FILE,
   TAG_TEXT,
   unpackDirectory,
   wrapSplitChunk,
@@ -88,6 +91,53 @@ describe("text compression", () => {
   it("rejects password-protected payload with the wrong password", () => {
     const encoded = compress("secret", 64, "hunter2")
     expect(() => decompress(encoded, 64, "wrong")).toThrow(/Invalid password/)
+  })
+})
+
+describe("binary file compression", () => {
+  it("round-trips arbitrary binary bytes byte-for-byte", () => {
+    const input = Buffer.from(Array.from({ length: 256 }, (_, i) => i))
+    const encoded = compressFile(input, 64)
+    expect(decompressFile(encoded, 64)).toEqual(input)
+  })
+
+  it("round-trips binary bytes with base85", () => {
+    const input = Buffer.from(Array.from({ length: 256 }, (_, i) => i))
+    const encoded = compressFile(input, 85)
+    expect(decompressFile(encoded, 85)).toEqual(input)
+  })
+
+  it("round-trips bytes containing invalid UTF-8 sequences", () => {
+    const input = Buffer.from([0xff, 0xfe, 0x00, 0xc0, 0xc1, 0x80, 0x81, 0xed, 0xa0, 0x80])
+    const encoded = compressFile(input, 64)
+    expect(decompressFile(encoded, 64)).toEqual(input)
+  })
+
+  it("round-trips an empty buffer", () => {
+    expect(decompressFile(compressFile(Buffer.alloc(0), 64), 64)).toEqual(Buffer.alloc(0))
+  })
+
+  it("tags file payloads correctly", () => {
+    const encoded = compressFile(Buffer.from("hello"), 64)
+    const { tag } = decompressPayload(encoded, 64)
+    expect(tag).toBe(TAG_FILE)
+  })
+
+  it("round-trips binary content with a password", () => {
+    const input = Buffer.from([0x00, 0x01, 0xff, 0xfe, 0x10, 0x20])
+    const password = "binary-secret"
+    const encoded = compressFile(input, 64, password)
+    expect(decompressFile(encoded, 64, password)).toEqual(input)
+  })
+
+  it("rejects text payload in decompressFile()", () => {
+    const encoded = compress("hello", 64)
+    expect(() => decompressFile(encoded, 64)).toThrow(/not a compressed file/)
+  })
+
+  it("rejects file payload in decompress()", () => {
+    const encoded = compressFile(Buffer.from("hello"), 64)
+    expect(() => decompress(encoded, 64)).toThrow(/decompressFile/)
   })
 })
 

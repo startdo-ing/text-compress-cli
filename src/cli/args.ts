@@ -9,7 +9,7 @@
  */
 
 import { existsSync, statSync } from "node:fs"
-import { assertDirectory, readTextFile } from "../fs/paths.js"
+import { assertDirectory, readBinaryFile, readTextFile } from "../fs/paths.js"
 import type { ErrorCorrection } from "../qr/protocol.js"
 import type { Encoding } from "../types.js"
 
@@ -189,6 +189,17 @@ export function resolveInputArgs(args: Args, command: "compress" | "decompress" 
 export function readInput(args: Args): string {
   if (args.file) return readTextFile(args.file, "compress")
   if (args.text !== undefined) return args.text
+  throw new Error("No input provided. Pass a path, or use -t <text>.")
+}
+
+/**
+ * Read compress input as raw bytes (binary-safe).
+ *
+ * A real file path is read verbatim; inline `-t` text is UTF-8 encoded.
+ */
+export function readInputBuffer(args: Args): Buffer {
+  if (args.file) return readBinaryFile(args.file, "compress")
+  if (args.text !== undefined) return Buffer.from(args.text, "utf-8")
   throw new Error("No input provided. Pass a path, or use -t <text>.")
 }
 

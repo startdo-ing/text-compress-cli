@@ -49,6 +49,34 @@ describe("text-compress cli", () => {
     expect(readFileSync(restored, "utf-8")).toBe("restore me")
   })
 
+  it("round-trips a binary file byte-for-byte", () => {
+    const dir = makeTempDir()
+    const input = join(dir, "image.bin")
+    const compressed = join(dir, "image.txt")
+    const restored = join(dir, "restored.bin")
+    const bytes = Buffer.from(Array.from({ length: 512 }, (_, i) => (i * 37) % 256))
+    writeFileSync(input, bytes)
+
+    runCli([input, "-o", compressed])
+    runCli([compressed, "-o", restored])
+
+    expect(readFileSync(restored)).toEqual(bytes)
+  })
+
+  it("round-trips a binary file with invalid UTF-8 byte sequences", () => {
+    const dir = makeTempDir()
+    const input = join(dir, "raw.bin")
+    const compressed = join(dir, "raw.txt")
+    const restored = join(dir, "restored.bin")
+    const bytes = Buffer.from([0xff, 0xfe, 0xed, 0xa0, 0x80, 0x00, 0xc0, 0xc1])
+    writeFileSync(input, bytes)
+
+    runCli([input, "-o", compressed])
+    runCli([compressed, "-o", restored])
+
+    expect(readFileSync(restored)).toEqual(bytes)
+  })
+
   it("compresses a folder from a bare path", () => {
     const dir = makeTempDir()
     const project = join(dir, "project")

@@ -59,3 +59,28 @@ export function readTextFile(
   }
   return readFileSync(path, "utf-8")
 }
+
+/**
+ * Read a file's raw bytes, with the same context-aware error messages as
+ * {@link readTextFile}. Used whenever file content must round-trip exactly
+ * (i.e. it may be binary).
+ *
+ * @param purpose - `"compress"` vs `"decompress"` changes the directory hint.
+ */
+export function readBinaryFile(
+  path: string,
+  purpose: "compress" | "decompress" = "compress",
+): Buffer {
+  const stat = statPath(path)
+  if (stat.isDirectory()) {
+    const hint =
+      purpose === "decompress"
+        ? "Pass the compressed .txt file, not a decompressed output folder."
+        : "Pass a folder path to compress a directory, or a file path for a single file."
+    throw new Error(`"${path}" is a directory, not a file. ${hint}`)
+  }
+  if (!stat.isFile()) {
+    throw new Error(`Cannot read "${path}": not a regular file.`)
+  }
+  return readFileSync(path)
+}

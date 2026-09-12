@@ -6,7 +6,7 @@
 
 import { writeFileSync } from "node:fs"
 import { unpackDirectory } from "../../archive/unpack.js"
-import { decompressPayload, TAG_FOLDER, TAG_TEXT } from "../../payload/tags.js"
+import { decompressPayload, TAG_FILE, TAG_FOLDER, TAG_TEXT } from "../../payload/tags.js"
 import { readSplitInput } from "../../split/parts.js"
 import { formatBytes, formatCount, printRunSummary } from "../analytics.js"
 import { type Args, readInput, resolveEncoding, resolveEncodingOptional } from "../args.js"
@@ -57,6 +57,27 @@ export function runDecompress(args: Args): void {
         "Files restored": formatCount(files),
         "Directories restored": formatCount(dirs),
         "Restored size": formatBytes(bytes),
+        Time: `${elapsedMs.toFixed(0)} ms`,
+      },
+    })
+    return
+  }
+
+  if (tag === TAG_FILE) {
+    const outputPath = resolveOutputPath(args, "decompressed.de", ".de")
+    writeFileSync(outputPath, data)
+    const outputBytes = data.length
+    const ratio = inputBytes === 0 ? 0 : outputBytes / inputBytes
+
+    printRunSummary({
+      title: "Decompressed file",
+      outputPaths: [outputPath],
+      stats: {
+        Encoding: `base${encoding}`,
+        [`Compressed (base${encoding})`]: formatBytes(inputBytes),
+        ...(partPaths ? { "Input parts": partPaths.length } : {}),
+        "Restored size": formatBytes(outputBytes),
+        "Expansion ratio": ratio.toFixed(3),
         Time: `${elapsedMs.toFixed(0)} ms`,
       },
     })

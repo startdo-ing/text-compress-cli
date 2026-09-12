@@ -11,17 +11,18 @@
  * ```
  */
 
+// Binary file API
+export { compressFile, decompressFile } from "./api/file.js"
 // Folder API
 export { compressFolder, decompressToPath } from "./api/folder.js"
-
 // Text API
 export { compress, decompress } from "./api/text.js"
 // Archive unpack (exposed for advanced use / tests)
 export { unpackDirectory } from "./archive/unpack.js"
 // Path validation helpers
-export { assertDirectory, readTextFile } from "./fs/paths.js"
+export { assertDirectory, readBinaryFile, readTextFile } from "./fs/paths.js"
 // Low-level payload access
-export { decompressPayload, TAG_FOLDER, TAG_TEXT } from "./payload/tags.js"
+export { decompressPayload, TAG_FILE, TAG_FOLDER, TAG_TEXT } from "./payload/tags.js"
 export type { ErrorCorrection, Frame, HeaderFrame, PayloadKind, Transfer } from "./qr/protocol.js"
 export {
   createTransfer,

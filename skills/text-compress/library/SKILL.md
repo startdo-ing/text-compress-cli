@@ -7,7 +7,7 @@ description: >
 metadata:
   type: sub-skill
   library: text-compress
-  library_version: '2.1.3'
+  library_version: '2.2.0'
 sources:
   - startdo-ing/text-compress-cli:README.md
   - startdo-ing/text-compress-cli:src/index.ts
@@ -26,6 +26,8 @@ context.
 import {
   compress,
   decompress,
+  compressFile,
+  decompressFile,
   compressFolder,
   decompressToPath,
 } from "text-compress";
@@ -51,6 +53,19 @@ const fromZ85 = decompress(z85, 85);
 ```ts
 const locked = compress("hello world", 64, "my secret");
 const unlocked = decompress(locked, 64, "my secret");
+```
+
+### Binary files
+
+`compress()`/`decompress()` round-trip through UTF-8 strings, so they corrupt
+non-text bytes. Use `compressFile()`/`decompressFile()` for arbitrary binary
+data — they operate on `Buffer` end to end.
+
+```ts
+import { readFileSync, writeFileSync } from "node:fs";
+
+const encoded = compressFile(readFileSync("./photo.png"));
+writeFileSync("./restored.png", decompressFile(encoded));
 ```
 
 ### Folder archives
@@ -79,6 +94,8 @@ if (tag === TAG_TEXT) {
 | --- | --- |
 | `compress(text, encoding?, password?)` | UTF-8 text → encoded string (`64` or `85`) |
 | `decompress(encoded, encoding?, password?)` | Encoded text payload → string |
+| `compressFile(buffer, encoding?, password?)` | Raw bytes → encoded string, byte-for-byte |
+| `decompressFile(encoded, encoding?, password?)` | Encoded file payload → `Buffer` |
 | `compressFolder(dirPath, encoding?, password?)` | Folder → `{ encoded, fileCount, ... }` |
 | `decompressToPath(encoded, destDir, encoding?, password?)` | Unpack folder archive |
 | `decompressPayload(encoded, encoding?, password?)` | Low-level `{ tag, data }` |

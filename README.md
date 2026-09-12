@@ -8,6 +8,7 @@ Brotli-compress text or entire folder trees into pasteable base64 or Z85 strings
 
 - **Auto-detect** — pass a path; plain files compress, valid payloads decompress (no subcommand)
 - **Max-quality Brotli** via Node.js `zlib`
+- **Binary-safe** — single-file compress/decompress round-trips arbitrary bytes exactly (images, archives, etc.), not just UTF-8 text
 - **Base64 (default)** — paste-safe (`A-Za-z0-9+/=`)
 - **Z85 base85** — ~8% smaller; punctuation-safe for code blocks
 - **Folder archives** — pack a directory tree into one string
@@ -141,6 +142,8 @@ Keys while sending: `q` or Ctrl+C stop, space pause, `+` / `-` change speed.
 import {
   compress,
   decompress,
+  compressFile,
+  decompressFile,
   compressFolder,
   decompressToPath,
 } from "text-compress";
@@ -151,6 +154,9 @@ const restored = decompress(encoded);
 const locked = compress("hello world", 64, "my secret");
 const unlocked = decompress(locked, 64, "my secret");
 
+const fileBlob = compressFile(readFileSync("./photo.png"));
+writeFileSync("./photo-restored.png", decompressFile(fileBlob));
+
 const { encoded: folderBlob } = compressFolder("./my-project");
 decompressToPath(folderBlob, "./restored-project");
 ```
@@ -159,6 +165,8 @@ decompressToPath(folderBlob, "./restored-project");
 |---|---|
 | `compress(text, encoding?, password?)` | UTF-8 text → encoded string (`64` or `85`) |
 | `decompress(encoded, encoding?, password?)` | Encoded text payload → string |
+| `compressFile(buffer, encoding?, password?)` | Raw bytes → encoded string, byte-for-byte |
+| `decompressFile(encoded, encoding?, password?)` | Encoded file payload → `Buffer` |
 | `compressFolder(dirPath, encoding?, password?)` | Folder → `{ encoded, fileCount, ... }` |
 | `decompressToPath(encoded, destDir, encoding?, password?)` | Unpack folder archive |
 | `decompressPayload(encoded, encoding?, password?)` | Low-level `{ tag, data }` |
@@ -227,6 +235,11 @@ npm publish --access public
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/LEARNING.md](docs/LEARNING.md).
 
 ## Changelog
+
+### v2.2.0 — `text-compress` (2026-09-12)
+
+- Fix binary file corruption: single-file compress/decompress (bare path, `-f`, and `send -f`) now reads and writes raw bytes end to end instead of round-tripping through UTF-8, so images, archives, and other non-text files restore byte-for-byte
+- Add `compressFile()` / `decompressFile()` library functions and a `TAG_FILE` payload tag for raw binary content
 
 ### v2.1.3 — `text-compress` (2026-09-03)
 

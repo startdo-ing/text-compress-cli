@@ -4,11 +4,12 @@
  * `text-compress` command — Brotli-compress input and write encoded output.
  */
 
+import { compressFile } from "../../api/file.js"
 import { compress } from "../../api/text.js"
 import { assertDirectory } from "../../fs/paths.js"
 import { compressFolderToPath } from "../../streaming/folder.js"
 import { formatBytes, formatCount, printRunSummary, splitAnalytics } from "../analytics.js"
-import { type Args, readInput, resolveEncoding } from "../args.js"
+import { type Args, readInputBuffer, resolveEncoding } from "../args.js"
 import { writeCompressedOutput } from "../output.js"
 import { resolveOutputPath } from "../paths.js"
 
@@ -54,11 +55,13 @@ export async function runCompress(args: Args): Promise<void> {
   }
 
   const outputPath = resolveOutputPath(args, "compressed.txt", ".txt")
-  const input = readInput(args)
-  const inputBytes = Buffer.byteLength(input, "utf-8")
+  const input = readInputBuffer(args)
+  const inputBytes = input.length
 
   const start = process.hrtime.bigint()
-  const result = compress(input, encoding, args.password)
+  const result = args.file
+    ? compressFile(input, encoding, args.password)
+    : compress(input.toString("utf-8"), encoding, args.password)
   const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6
 
   const { paths: outputPaths, splitChunkSize } = writeCompressedOutput(
@@ -72,8 +75,10 @@ export async function runCompress(args: Args): Promise<void> {
   printRunSummary({
     title:
       outputPaths.length === 1
-        ? "Compressed text"
-        : `Compressed text → ${outputPaths.length} files`,
+        ? args.file
+          ? "Compressed file"
+          : "Compressed text"
+        : `Compressed ${args.file ? "file" : "text"} → ${outputPaths.length} files`,
     outputPaths,
     stats: {
       Encoding: `base${encoding}`,

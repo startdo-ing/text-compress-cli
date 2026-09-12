@@ -8,7 +8,7 @@ description: >
 metadata:
   type: core
   library: text-compress
-  library_version: '2.1.3'
+  library_version: '2.2.0'
 sources:
   - startdo-ing/text-compress-cli:README.md
   - startdo-ing/text-compress-cli:docs/ARCHITECTURE.md
@@ -61,4 +61,4 @@ decompress, the CLI tries both.
 
 ## Version
 
-Targets `text-compress` v2.1.3.
+Targets `text-compress` v2.2.0.

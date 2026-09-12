@@ -38,8 +38,7 @@ src/
 ├── fs/
 │   └── paths.ts             # Path validation and file reading
 ├── api/
-│   ├── text.ts              # compress() / decompress()
-│   └── folder.ts            # compressFolder() / decompressToPath()
+│   ├── text.ts              # compress() / decompress()│   ├── file.ts               # compressFile() / decompressFile() (raw binary)│   └── folder.ts            # compressFolder() / decompressToPath()
 ├── streaming/
 │   └── folder.ts            # Large-folder pipeline (disk-backed)
 └── cli/                     # Terminal interface
@@ -102,6 +101,7 @@ After Brotli decompression, the **first byte** identifies the payload:
 |----------|--------------|----------------|
 | `0x01`   | `TAG_TEXT`   | UTF-8 string   |
 | `0x02`   | `TAG_FOLDER` | Binary archive |
+| `0x03`   | `TAG_FILE`   | Raw binary file (arbitrary bytes) |
 
 This lets one encoded string represent either text or a folder without external metadata — similar to MIME types or protobuf field tags.
 
@@ -241,8 +241,8 @@ Both produce the same wire format; only the build strategy differs.
 
 **Exported** via `src/index.ts` (published on npm):
 
-- `compress`, `decompress`, `compressFolder`, `decompressToPath`
-- `decompressPayload`, `TAG_TEXT`, `TAG_FOLDER`
+- `compress`, `decompress`, `compressFile`, `decompressFile`, `compressFolder`, `decompressToPath`
+- `decompressPayload`, `TAG_TEXT`, `TAG_FOLDER`, `TAG_FILE`
 - Split helpers, path helpers, `unpackDirectory`
 
 **Internal** (not in package exports):

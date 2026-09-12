@@ -8,7 +8,7 @@ description: >
 metadata:
   type: sub-skill
   library: text-compress
-  library_version: '2.1.3'
+  library_version: '2.2.0'
 sources:
   - startdo-ing/text-compress-cli:README.md
   - startdo-ing/text-compress-cli:src/cli/main.ts
@@ -94,7 +94,11 @@ Source: src/cli/commands/send.ts, src/qr/protocol.ts
 | Compress file/text | `<input>.txt` |
 | Compress folder | `<folder-name>.txt` |
 | Decompress text | `<input>.de.txt` |
+| Decompress binary file | `<input>.de` |
 | Decompress folder | `<input>.de/` |
+
+Compressing a real file path (not `-t` inline text) reads and restores raw
+bytes, so binary files (images, archives, etc.) round-trip byte-for-byte.
 
 ## Common Mistakes
 

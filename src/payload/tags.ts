@@ -14,8 +14,8 @@
  * ```
  *   [tag: u8][payload bytes…]
  *        │         │
- *        │         └── Brotli-compressed body (text UTF-8 or archive binary)
- *        └── TAG_TEXT (0x01) or TAG_FOLDER (0x02)
+ *        │         └── Brotli-compressed body (text UTF-8, archive, or raw file bytes)
+ *        └── TAG_TEXT (0x01), TAG_FOLDER (0x02), or TAG_FILE (0x03)
  * ```
  *
  * ## Full pipeline (compress)
@@ -42,6 +42,9 @@ export const TAG_TEXT = 0x01
 
 /** Tag byte for folder archive payloads. */
 export const TAG_FOLDER = 0x02
+
+/** Tag byte for raw single-file binary payloads (arbitrary bytes, not necessarily UTF-8). */
+export const TAG_FILE = 0x03
 
 /**
  * Prepend a 1-byte type tag to raw payload bytes.

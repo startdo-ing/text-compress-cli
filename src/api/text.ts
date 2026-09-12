@@ -14,7 +14,13 @@
  * distinguished by the leading tag byte after decompression.
  */
 
-import { compressTaggedPayload, decompressPayload, TAG_TEXT } from "../payload/tags.js"
+import {
+  compressTaggedPayload,
+  decompressPayload,
+  TAG_FILE,
+  TAG_FOLDER,
+  TAG_TEXT,
+} from "../payload/tags.js"
 import type { Encoding } from "../types.js"
 
 /**
@@ -30,12 +36,19 @@ export function compress(text: string, encoding: Encoding = 64, password?: strin
 /**
  * Decompress an encoded text payload back to a UTF-8 string.
  *
- * @throws If the payload is a folder archive (wrong tag).
+ * @throws If the payload is a folder archive or binary file (wrong tag).
  */
 export function decompress(encoded: string, encoding: Encoding = 64, password?: string): string {
   const raw = decompressPayload(encoded, encoding, password)
-  if (raw.tag !== TAG_TEXT) {
+  if (raw.tag === TAG_FOLDER) {
     throw new Error("This payload is a compressed folder, not text. Use decompressToPath.")
+  }
+  if (raw.tag !== TAG_TEXT) {
+    throw new Error(
+      raw.tag === TAG_FILE
+        ? "This payload is a compressed binary file, not text. Use decompressFile."
+        : "This payload is not text.",
+    )
   }
   return raw.data.toString("utf-8")
 }
