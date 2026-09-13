@@ -24,13 +24,17 @@ export interface Args {
   /** Max chars per part, or `0` to disable splitting (`--no-split` / `-s 0`). */
   split?: number
   password?: string
-  /** Force compress, decompress, or QR send instead of auto-detecting. */
-  mode?: "compress" | "decompress" | "send"
+  /** Force compress, decompress, QR send, or QR image export instead of auto-detecting. */
+  mode?: "compress" | "decompress" | "send" | "qr"
   fps?: number
   chunkSize?: number
   ec?: ErrorCorrection
   raw?: boolean
   dump?: boolean
+  /** Preview `qr` image count without writing files. */
+  dryRun?: boolean
+  /** Pixel width per QR PNG (`qr` command only). */
+  imageSize?: number
 }
 
 /** Reject multiple simultaneous input sources. */
@@ -110,6 +114,15 @@ export function parseArgs(argv: string[]): Args {
       args.raw = true
     } else if (arg === "--dump") {
       args.dump = true
+    } else if (arg === "--dry-run") {
+      args.dryRun = true
+    } else if (arg === "--image-size") {
+      const value = argv[++i]
+      const imageSize = Number(value)
+      if (!value || !Number.isInteger(imageSize) || imageSize < 1) {
+        throw new Error(`Invalid --image-size "${value}". Use a positive integer (pixels).`)
+      }
+      args.imageSize = imageSize
     } else if (!arg.startsWith("-")) {
       if (args.path !== undefined || args.text !== undefined || args.file || args.dir) {
         throw new Error("Multiple inputs specified. Pass one path, or use -t, -f, or -d.")
@@ -125,7 +138,10 @@ export function parseArgs(argv: string[]): Args {
  *
  * Mutates `args` in place: e.g. a directory passed as `-f` becomes `args.dir`.
  */
-export function resolveInputArgs(args: Args, command: "compress" | "decompress" | "send"): void {
+export function resolveInputArgs(
+  args: Args,
+  command: "compress" | "decompress" | "send" | "qr",
+): void {
   assertSingleInput(args)
   if (args.text !== undefined) return
 

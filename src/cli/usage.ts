@@ -27,6 +27,7 @@ Options:
   -D, --decompress        Always decompress
   --send                  Stream the payload as looping QR codes (camera receive)
   send <path>             Same as --send (optional subcommand)
+  qr <path>               Render QR frames to numbered PNG files instead of animating
   -o, --output <path>     Output path (optional, see defaults below)
   -s, --split <chars>     Split compressed output into multiple files. Each
                            part file is at most this many characters total,
@@ -48,6 +49,8 @@ Options:
   --ec <L|M|Q|H>           QR error correction (default: M)
   --raw                    QR send the file as-is, without compressing
   --dump                   Print one lap of QR frame text instead of animating
+  --dry-run                With "qr", print the image count without writing files
+  --image-size <px>        With "qr", PNG width in pixels (default: qrcode's scale)
   -h, --help               Show this usage guide
   -V, --version            Show package version
 
@@ -77,6 +80,9 @@ Examples:
   text-compress --compress notes.txt
   text-compress send notes.md
   text-compress notes.md --send --fps 10
+  text-compress qr notes.md
+  text-compress qr notes.md -o ./qr-out --image-size 512
+  text-compress qr notes.md --dry-run
   npx text-compress ./somefile.md -p "hello-world"
 
 Every run prints analytics (encoding, size, ratio, time taken) after

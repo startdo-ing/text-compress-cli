@@ -238,4 +238,30 @@ describe("text-compress cli", () => {
     for (const frame of frames) assembler.addText(frame)
     await expect(assembler.assemble()).resolves.toBe(expected)
   })
+
+  it("qr --dry-run prints the image count without writing files", () => {
+    const dir = makeTempDir()
+    const input = join(dir, "notes.md")
+    writeFileSync(input, "qr image dry run test")
+
+    const output = runCli(["qr", input, "--dry-run", "--chunk-size", "40"])
+
+    expect(output).toMatch(/Images\s+\d+/)
+    expect(existsSync(join(dir, "notes-qr"))).toBe(false)
+  })
+
+  it("qr writes numbered PNG files", () => {
+    const dir = makeTempDir()
+    const input = join(dir, "notes.md")
+    writeFileSync(input, "qr image write test")
+    const outDir = join(dir, "qr-out")
+
+    runCli(["qr", input, "-o", outDir, "--chunk-size", "40"])
+
+    expect(existsSync(join(outDir, "qr-001.png"))).toBe(true)
+    const png = readFileSync(join(outDir, "qr-001.png"))
+    expect(png.subarray(0, 8)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    )
+  })
 })

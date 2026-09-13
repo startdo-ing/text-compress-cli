@@ -9,6 +9,7 @@ import { printVersion } from "./analytics.js"
 import { type Args, parseArgs, resolveEncodingOptional, resolveInputArgs } from "./args.js"
 import { runCompress } from "./commands/compress.js"
 import { runDecompress } from "./commands/decompress.js"
+import { runQrImages } from "./commands/qr.js"
 import { runSend } from "./commands/send.js"
 import { detectCompressedPayload } from "./detect.js"
 import { printUsage } from "./usage.js"
@@ -27,6 +28,7 @@ function normalizeArgv(argv: string[]): { argv: string[]; forcedMode?: Args["mod
   if (first === "compress" || first === "c") return { argv: rest, forcedMode: "compress" }
   if (first === "decompress" || first === "d") return { argv: rest, forcedMode: "decompress" }
   if (first === "send") return { argv: rest, forcedMode: "send" }
+  if (first === "qr") return { argv: rest, forcedMode: "qr" }
   return { argv }
 }
 
@@ -36,7 +38,8 @@ function readEncodedInput(args: Args): string {
   throw new Error("No input provided. Pass a path, or use -t <text>.")
 }
 
-function resolveCliMode(args: Args): "compress" | "decompress" | "send" {
+function resolveCliMode(args: Args): "compress" | "decompress" | "send" | "qr" {
+  if (args.mode === "qr") return "qr"
   if (args.mode === "send") return "send"
   if (args.mode === "compress") return "compress"
   if (args.mode === "decompress") return "decompress"
@@ -76,6 +79,11 @@ export function main() {
     resolveInputArgs(args, args.mode === "decompress" ? "decompress" : "compress")
 
     const mode = resolveCliMode(args)
+
+    if (mode === "qr") {
+      await runQrImages(args)
+      return
+    }
 
     if (mode === "send") {
       await runSend(args)
